@@ -1,0 +1,291 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
+import Image from 'next/image';
+
+const styles = [
+  { value: '', label: 'Default' },
+  { value: 'photorealistic', label: 'Photorealistic' },
+  { value: 'cinematic', label: 'Cinematic' },
+  { value: 'anime', label: 'Anime' },
+  { value: 'oil painting', label: 'Oil Painting' },
+  { value: 'watercolor', label: 'Watercolor' },
+  { value: 'digital art', label: 'Digital Art' },
+  { value: '3d render', label: '3D Render' },
+  { value: 'pixel art', label: 'Pixel Art' },
+];
+
+const aspectRatios = [
+  { value: '1:1', label: '1:1', desc: 'Square' },
+  { value: '16:9', label: '16:9', desc: 'Landscape' },
+  { value: '9:16', label: '9:16', desc: 'Portrait' },
+  { value: '4:3', label: '4:3', desc: 'Classic' },
+];
+
+const examplePrompts = [
+  'A serene Japanese garden with cherry blossoms falling into a koi pond at golden hour',
+  'Cyberpunk city street at night with neon reflections on wet pavement',
+  'An astronaut floating above Earth, reflected in the helmet visor',
+];
+
+interface GeneratedImageResult {
+  id: string;
+  imageUrl: string;
+  prompt: string;
+  style?: string;
+  aspectRatio?: string;
+}
+
+export default function ImageGeneratorPage() {
+  const { data: session, status } = useSession() || {};
+  const router = useRouter();
+  const [prompt, setPrompt] = useState('');
+  const [style, setStyle] = useState('');
+  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<GeneratedImageResult | null>(null);
+  const [history, setHistory] = useState<GeneratedImageResult[]>([]);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') router.replace('/login');
+  }, [status, router]);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetch('/api/images/history?limit=6')
+        .then(r => r.json())
+        .then(d => setHistory(d.images || []))
+        .catch(() => {});
+    }
+  }, [status]);
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+    setLoading(true);
+    setResult(null);
+    setImgError(false);
+
+    try {
+      const res = await fetch('/api/images/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, style, aspectRatio }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'Generation failed');
+        setLoading(false);
+        return;
+      }
+
+      if (data.imageUrl) {
+        setResult(data);
+        setHistory(prev => [data, ...prev].slice(0, 6));
+        toast.success('Image generated!');
+      } else {
+        toast.error('No image was returned');
+      }
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (status === 'loading' || status === 'unauthenticated') {
+    return <div className="flex items-center justify-center min-h-screen"><div className="animate-pulse text-muted-foreground">Loading...</div></div>;
+  }
+
+  return (
+    <div className="hero-gradient-green">
+      <section className="pt-12 pb-6 px-4">
+        <div className="mx-auto max-w-[1000px] text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-lime-400/20 bg-lime-400/10 px-4 py-1.5 text-sm text-lime-400 mb-4">
+            <ImageIcon className="h-3.5 w-3.5" /> AI Powered
+          </div>
+          <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3">
+            Image <span className="text-lime-400">Generator</span>
+          </h1>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Generate stunning images from text prompts with advanced AI.
+          </p>
+        </div>
+      </section>
+
+      <section className="pb-16 px-4">
+        <div className="mx-auto max-w-[1000px]">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-6">
+            {/* Input Panel */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-6">
+                <label className="block text-sm font-medium mb-2">Prompt</label>
+                <textarea
+                  value={prompt}
+                  onChange={e => setPrompt(e.target.value)}
+                  placeholder="Describe the image you want to create..."
+                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-lime-400/50"
+                  maxLength={2000}
+                />
+
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
+                      <Palette className="h-3.5 w-3.5" /> Style
+                    </label>
+                    <select
+                      value={style}
+                      onChange={e => setStyle(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-lime-400/50"
+                    >
+                      {styles.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
+                      <Ratio className="h-3.5 w-3.5" /> Aspect Ratio
+                    </label>
+                    <div className="flex gap-2">
+                      {aspectRatios.map(ar => (
+                        <button
+                          key={ar.value}
+                          onClick={() => setAspectRatio(ar.value)}
+                          className={`flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
+                            aspectRatio === ar.value
+                              ? 'border-lime-400/50 bg-lime-400/10 text-lime-400'
+                              : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {ar.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGenerate}
+                  disabled={loading || !prompt.trim()}
+                  className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-lime-400 to-green-500 px-4 py-3 text-sm font-medium text-black hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {loading ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                  ) : (
+                    <><Sparkles className="h-4 w-4" /> Generate Image</>
+                  )}
+                </button>
+              </div>
+
+              {/* Example Prompts */}
+              <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Try an example:</p>
+                <div className="flex flex-col gap-2">
+                  {examplePrompts.map((ep, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setPrompt(ep)}
+                      className="text-left text-xs text-muted-foreground hover:text-foreground rounded-lg px-3 py-2 bg-background/50 border border-border/30 hover:border-border transition-colors line-clamp-1"
+                    >
+                      {ep}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Result Panel */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-6 min-h-[300px] flex items-center justify-center">
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <motion.div
+                      key="loading"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="text-center"
+                    >
+                      <Loader2 className="h-10 w-10 text-lime-400 animate-spin mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">Creating your image...</p>
+                    </motion.div>
+                  ) : result?.imageUrl && !imgError ? (
+                    <motion.div
+                      key="result"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="w-full"
+                    >
+                      <div className="relative aspect-square rounded-xl overflow-hidden bg-muted">
+                        <Image
+                          src={result.imageUrl}
+                          alt={result.prompt}
+                          fill
+                          className="object-cover"
+                          onError={() => setImgError(true)}
+                          unoptimized
+                        />
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <a
+                          href={result.imageUrl}
+                          download={`image-${result.id}.png`}
+                          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-muted transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download
+                        </a>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-center"
+                    >
+                      <ImageIcon className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">Your generated image will appear here</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Recent History */}
+              {history.length > 0 && (
+                <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-4">
+                  <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" /> Recent
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {history.filter(h => h.imageUrl).slice(0, 6).map(img => (
+                      <button
+                        key={img.id}
+                        onClick={() => { setResult(img); setImgError(false); }}
+                        className="relative aspect-square rounded-lg overflow-hidden bg-muted border border-border/30 hover:border-lime-400/30 transition-colors"
+                      >
+                        <Image
+                          src={img.imageUrl}
+                          alt={img.prompt}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
