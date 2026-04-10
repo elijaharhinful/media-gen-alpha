@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette } from 'lucide-react';
+import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette, Upload, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -41,12 +41,20 @@ interface GeneratedImageResult {
   aspectRatio?: string;
 }
 
+interface RefImage {
+  file: File;
+  preview: string;
+}
+
 export default function ImageGeneratorPage() {
   const { data: session, status } = useSession() || {};
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [refImages, setRefImages] = useState<RefImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GeneratedImageResult | null>(null);
   const [history, setHistory] = useState<GeneratedImageResult[]>([]);
@@ -65,6 +73,63 @@ export default function ImageGeneratorPage() {
     }
   }, [status]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (refImages.length + files.length > 10) {
+      toast.error('Maximum 10 reference images allowed');
+      return;
+    }
+    const newImages = files.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    setRefImages(prev => [...prev, ...newImages]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeRefImage = (index: number) => {
+    setRefImages(prev => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const uploadRefImages = async (): Promise<string[]> => {
+    const paths: string[] = [];
+    for (const img of refImages) {
+      try {
+        const presignRes = await fetch('/api/upload/presigned', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: img.file.name,
+            contentType: img.file.type,
+            isPublic: true,
+          }),
+        });
+        const { uploadUrl, cloud_storage_path } = await presignRes.json();
+
+        const url = new URL(uploadUrl);
+        const signedHeaders = url.searchParams.get('X-Amz-SignedHeaders') || '';
+        const headers: Record<string, string> = { 'Content-Type': img.file.type };
+        if (signedHeaders.includes('content-disposition')) {
+          headers['Content-Disposition'] = 'attachment';
+        }
+
+        await fetch(uploadUrl, {
+          method: 'PUT',
+          headers,
+          body: img.file,
+        });
+
+        paths.push(cloud_storage_path);
+      } catch (err) {
+        console.error('Upload failed:', err);
+      }
+    }
+    return paths;
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
@@ -72,10 +137,20 @@ export default function ImageGeneratorPage() {
     setImgError(false);
 
     try {
+      let refPaths: string[] = [];
+      if (refImages.length > 0) {
+        refPaths = await uploadRefImages();
+      }
+
       const res = await fetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, style, aspectRatio }),
+        body: JSON.stringify({
+          prompt,
+          style,
+          aspectRatio,
+          referenceImages: refPaths,
+        }),
       });
 
       const data = await res.json();
@@ -109,7 +184,7 @@ export default function ImageGeneratorPage() {
       <section className="pt-12 pb-6 px-4">
         <div className="mx-auto max-w-[1000px] text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-lime-400/20 bg-lime-400/10 px-4 py-1.5 text-sm text-lime-400 mb-4">
-            <ImageIcon className="h-3.5 w-3.5" /> AI Powered
+            <ImageIcon className="h-3.5 w-3.5" /> Seedream 3
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3">
             Image <span className="text-lime-400">Generator</span>
@@ -134,6 +209,43 @@ export default function ImageGeneratorPage() {
                   className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-lime-400/50"
                   maxLength={2000}
                 />
+
+                {/* Reference Images */}
+                <div className="mt-4">
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
+                    <ImageIcon className="h-3.5 w-3.5" /> Reference Images ({refImages.length}/10)
+                  </label>
+                  <div className="flex flex-wrap gap-3 items-start">
+                    {refImages.map((img, i) => (
+                      <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 bg-muted">
+                        <Image src={img.preview} alt={`Reference ${i + 1}`} fill className="object-cover" />
+                        <button
+                          onClick={() => removeRefImage(i)}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center text-white hover:bg-red-500 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {refImages.length < 10 && (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-20 h-20 rounded-lg border-2 border-dashed border-border/50 flex flex-col items-center justify-center text-muted-foreground hover:text-foreground hover:border-lime-400/30 transition-colors"
+                      >
+                        <Upload className="h-4 w-4 mb-1" />
+                        <span className="text-[10px]">Upload</span>
+                      </button>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-4 mt-4">
                   <div>

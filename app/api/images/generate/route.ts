@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { prompt, style, aspectRatio } = body ?? {};
+    const { prompt, style, aspectRatio, referenceImages } = body ?? {};
 
     if (!prompt?.trim()) {
       return NextResponse.json(
@@ -56,6 +56,22 @@ export async function POST(request: NextRequest) {
       ? aspectRatio
       : "1:1";
 
+    // Resolve reference image URLs
+    const refImageUrls = referenceImages?.length > 0
+      ? await Promise.all(referenceImages.map((path: string) => getFileUrl(path, true)))
+      : [];
+
+    // Construct multimodal message
+    const messageContent: any[] = [{ type: "text", text: enhancedPrompt }];
+    if (refImageUrls.length > 0) {
+      refImageUrls.forEach((url: string) => {
+        messageContent.push({
+          type: "image_url",
+          image_url: { url }
+        });
+      });
+    }
+
     // Call OpenRouter image generation via chat/completions
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
@@ -69,7 +85,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           model,
-          messages: [{ role: "user", content: enhancedPrompt }],
+          messages: [{ role: "user", content: messageContent }],
           modalities: ["image"],
           max_tokens: 1500,
           image_config: {
@@ -145,6 +161,7 @@ export async function POST(request: NextRequest) {
       data: {
         prompt,
         imageUrl: imageUrl || null,
+        referenceImages: referenceImages || [],
         style: style || null,
         aspectRatio: aspectRatio || "1:1",
         status: imageUrl ? "completed" : "failed",

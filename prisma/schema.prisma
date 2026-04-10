@@ -81,6 +81,7 @@ model GeneratedImage {
     id        String   @id @default(cuid())
     prompt    String
     imageUrl  String?
+    referenceImages String[] @default([]) // cloud storage paths
     style     String?
     aspectRatio String? // e.g., "1:1", "16:9", "9:16"
     status    String   @default("pending") // pending, completed, failed

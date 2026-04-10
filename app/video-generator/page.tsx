@@ -172,7 +172,7 @@ export default function VideoGeneratorPage() {
       <section className="pt-12 pb-6 px-4">
         <div className="mx-auto max-w-[1000px] text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-purple-400/20 bg-purple-400/10 px-4 py-1.5 text-sm text-purple-400 mb-4">
-            <Film className="h-3.5 w-3.5" /> AI Powered
+            <Film className="h-3.5 w-3.5" /> Powered by Pika
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3">
             Video <span className="text-purple-400">Generator</span>
