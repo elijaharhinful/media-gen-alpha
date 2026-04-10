@@ -12,6 +12,7 @@ import {
   LogIn,
   Menu,
   X,
+  Settings,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signOut } from 'next-auth/react';
@@ -92,13 +93,23 @@ export function SiteHeader() {
         {/* Right side: Auth + Mobile */}
         <div className="flex items-center gap-2">
           {status === 'authenticated' ? (
-            <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
+            <>
+              <Link
+                href="/settings"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                title="Settings"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </Link>
+              <button
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            </>
           ) : status === 'unauthenticated' ? (
             <Link
               href="/login"
