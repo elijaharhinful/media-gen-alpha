@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
           "HTTP-Referer": "https://movie-gen-alpha.app",
-          "X-Title": "Movie Gen Alpha - Multiplier",
+          "X-OpenRouter-Title": "Movie Gen Alpha - Multiplier",
         },
         body: JSON.stringify({
           model,

@@ -57,9 +57,12 @@ export async function POST(request: NextRequest) {
       : "1:1";
 
     // Resolve reference image URLs
-    const refImageUrls = referenceImages?.length > 0
-      ? await Promise.all(referenceImages.map((path: string) => getFileUrl(path, true)))
-      : [];
+    const refImageUrls =
+      referenceImages?.length > 0
+        ? await Promise.all(
+            referenceImages.map((path: string) => getFileUrl(path, true)),
+          )
+        : [];
 
     // Construct multimodal message
     const messageContent: any[] = [{ type: "text", text: enhancedPrompt }];
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
       refImageUrls.forEach((url: string) => {
         messageContent.push({
           type: "image_url",
-          image_url: { url }
+          image_url: { url },
         });
       });
     }
@@ -81,7 +84,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
           "HTTP-Referer": "https://movie-gen-alpha.app",
-          "X-Title": "Movie Gen Alpha - Image Generator",
+          "X-OpenRouter-Title": "Movie Gen Alpha - Image Generator",
         },
         body: JSON.stringify({
           model,

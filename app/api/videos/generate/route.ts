@@ -9,30 +9,24 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Client, getBucketConfig } from "@/lib/aws-config";
 import { getFileUrl } from "@/lib/s3";
 
-// OpenRouter video generation uses an async/polling pattern:
-// 1. POST to /api/alpha/videos/generations → get a generation ID
-// 2. Poll GET /api/alpha/videos/generations/:id until status === 'completed'
 const OPENROUTER_BASE = "https://openrouter.ai";
 
 async function pollVideoStatus(
-  generationId: string,
+  jobId: string,
   apiKey: string,
-  maxAttempts = 30,
-  intervalMs = 5000,
+  maxAttempts = 20,
+  intervalMs = 30000,
 ): Promise<{ videoUrl: string; status: string }> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise((r) => setTimeout(r, intervalMs));
 
-    const res = await fetch(
-      `${OPENROUTER_BASE}/api/alpha/videos/generations/${generationId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://movie-gen-alpha.app",
-          "X-Title": "Movie Gen Alpha – Video Generator",
-        },
+    const res = await fetch(`${OPENROUTER_BASE}/api/v1/videos/${jobId}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://movie-gen-alpha.app",
+        "X-Title": "Movie Gen Alpha – Video Generator",
       },
-    );
+    });
 
     if (!res.ok) continue;
 
@@ -40,18 +34,22 @@ async function pollVideoStatus(
     const status: string = data?.status ?? "pending";
 
     if (status === "completed") {
-      const videoUrl: string =
-        data?.video?.url ?? data?.url ?? data?.output?.url ?? "";
-      return { videoUrl, status: "completed" };
+      return { videoUrl: data?.unsigned_urls?.[0] ?? "", status: "completed" };
     }
 
     if (status === "failed" || status === "error") {
+      console.error("Video generation failed:", data?.error);
       return { videoUrl: "", status: "failed" };
     }
+    // "pending" | "in_progress" → keep polling
   }
 
-  // Timed out — mark as still processing
   return { videoUrl: "", status: "processing" };
+}
+
+async function resolveUrl(path: string): Promise<string> {
+  if (path.startsWith("http")) return path;
+  return (await getFileUrl(path, true)) ?? path;
 }
 
 export async function POST(request: NextRequest) {
@@ -62,8 +60,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { prompt, referenceImages, resolution, aspectRatio, duration } =
-      body ?? {};
+    const {
+      prompt,
+      inputMode, // "keyframe" | "reference"
+      // keyframe mode — resolved public URLs sent from client
+      startFrameUrl,
+      endFrameUrl,
+      // reference mode — arrays of resolved public URLs
+      referenceImages, // string[]  max 9
+      referenceVideos, // string[]  max 3  (requires model that supports video refs)
+      referenceAudios, // string[]  max 3  (requires ≥1 image or video ref)
+      // settings
+      resolution,
+      aspectRatio,
+      duration, // integer seconds
+    } = body ?? {};
 
     if (!prompt?.trim()) {
       return NextResponse.json(
@@ -72,7 +83,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check credits
     const creditCheck = await canUserUseTool(
       session.user.id,
       "VIDEO_GENERATOR",
@@ -92,46 +102,107 @@ export async function POST(request: NextRequest) {
     const model =
       process.env.OPENROUTER_VIDEO_MODEL ?? "bytedance/seedance-2.0";
 
-    // Save the video generation job to the database
+    const durationSeconds =
+      typeof duration === "string"
+        ? parseInt(duration.replace("s", ""), 10) || 5
+        : typeof duration === "number"
+          ? duration
+          : 5;
+
     const record = await prisma.generatedVideo.create({
       data: {
         prompt,
         referenceImages: referenceImages || [],
         resolution: resolution || "720p",
         aspectRatio: aspectRatio || "16:9",
-        duration: duration || "5s",
+        duration: `${durationSeconds}s`,
         status: "pending",
         userId: session.user.id,
       },
     });
 
     try {
-      // Step 1 — Submit video generation request to OpenRouter
-      const requestBody: any = {
+      const requestBody: Record<string, unknown> = {
         model,
         prompt,
         resolution: resolution || "720p",
         aspect_ratio: aspectRatio || "16:9",
-        duration: duration || "5s",
+        duration: durationSeconds,
       };
 
-      if (referenceImages?.length > 0) {
-        requestBody.reference_images = referenceImages;
+      // ── KEYFRAME MODE ────────────────────────────────────────────────────
+      if (inputMode === "keyframe" && startFrameUrl) {
+        const frameImages: Array<{
+          type: string;
+          image_url: { url: string };
+          frame_type: string;
+        }> = [
+          {
+            type: "image_url",
+            image_url: { url: await resolveUrl(startFrameUrl) },
+            frame_type: "first_frame",
+          },
+        ];
+        if (endFrameUrl) {
+          frameImages.push({
+            type: "image_url",
+            image_url: { url: await resolveUrl(endFrameUrl) },
+            frame_type: "last_frame",
+          });
+        }
+        requestBody.frame_images = frameImages;
       }
 
-      const response = await fetch(
-        `${OPENROUTER_BASE}/api/alpha/videos/generations`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-            "HTTP-Referer": "https://movie-gen-alpha.app",
-            "X-Title": "Movie Gen Alpha - Video Generator",
-          },
-          body: JSON.stringify(requestBody),
+      // ── REFERENCE MODE ───────────────────────────────────────────────────
+      if (inputMode === "reference") {
+        const imgUrls: string[] = await Promise.all(
+          (referenceImages ?? []).map(resolveUrl),
+        );
+        const vidUrls: string[] = await Promise.all(
+          (referenceVideos ?? []).map(resolveUrl),
+        );
+        const audUrls: string[] = await Promise.all(
+          (referenceAudios ?? []).map(resolveUrl),
+        );
+
+        // Image refs → OpenRouter normalized input_references field
+        if (imgUrls.length > 0) {
+          requestBody.input_references = imgUrls.map((url) => ({
+            type: "image_url",
+            image_url: { url },
+          }));
+        }
+
+        // Video + audio refs → provider passthrough.
+        // OpenRouter's normalized schema only covers image refs. Video/audio
+        // must go via provider options passthrough using the Seedance upstream
+        // format (separate video_urls / audio_urls arrays).
+        // Note: audio requires at least one image or video ref alongside it.
+        if (vidUrls.length > 0 || audUrls.length > 0) {
+          requestBody.provider = {
+            options: {
+              bytedance: {
+                parameters: {
+                  ...(vidUrls.length > 0 && { video_urls: vidUrls }),
+                  ...(audUrls.length > 0 && { audio_urls: audUrls }),
+                },
+              },
+            },
+          };
+        }
+      }
+
+      // ── SUBMIT ───────────────────────────────────────────────────────────
+      const response = await fetch(`${OPENROUTER_BASE}/api/v1/videos`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://movie-gen-alpha.app",
+          "X-Title": "Movie Gen Alpha - Video Generator",
         },
-      );
+        body: JSON.stringify(requestBody),
+      });
 
       if (!response.ok) {
         const errText = await response.text();
@@ -152,23 +223,14 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // 202 Accepted → { id, polling_url, status }
       const submissionData = await response.json();
-      const generationId: string = submissionData?.id ?? "";
+      const jobId: string = submissionData?.id ?? "";
 
-      if (!generationId) {
-        // No generation ID — possibly a synchronous response with a direct URL
-        const directUrl: string =
-          submissionData?.video?.url ??
-          submissionData?.url ??
-          submissionData?.output?.url ??
-          "";
-
+      if (!jobId) {
         await prisma.generatedVideo.update({
           where: { id: record.id },
-          data: {
-            videoUrl: directUrl || null,
-            status: directUrl ? "completed" : "processing",
-          },
+          data: { status: "processing" },
         });
         await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
           videoId: record.id,
@@ -176,35 +238,59 @@ export async function POST(request: NextRequest) {
         });
         return NextResponse.json({
           id: record.id,
-          videoUrl: directUrl,
-          status: directUrl ? "completed" : "processing",
+          status: "processing",
           prompt,
-          message: directUrl
-            ? undefined
-            : "Video is being processed. Check back shortly.",
+          message: "Video is being processed. Check back shortly.",
         });
       }
 
-      // Step 2 — Poll for completion
-      const { videoUrl, status } = await pollVideoStatus(generationId, apiKey);
+      // ── POLL ─────────────────────────────────────────────────────────────
+      const { videoUrl, status } = await pollVideoStatus(jobId, apiKey);
 
-      const { bucketName } = getBucketConfig();
-      const s3 = createS3Client();
+      if (status === "processing") {
+        await prisma.generatedVideo.update({
+          where: { id: record.id },
+          data: { status: "processing" },
+        });
+        await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
+          videoId: record.id,
+          prompt: prompt.substring(0, 100),
+        });
+        return NextResponse.json({
+          id: record.id,
+          status: "processing",
+          prompt,
+          message: "Video is still being processed. Check back shortly.",
+        });
+      }
 
-      const res = await fetch(videoUrl);
-      const videoBuffer = await res.arrayBuffer();
-      const videoFileName = `generated/videos/${Date.now()}.mp4`;
+      // ── UPLOAD TO S3 ─────────────────────────────────────────────────────
+      let permanentUrl = videoUrl;
+      if (status === "completed" && videoUrl) {
+        try {
+          const { bucketName } = getBucketConfig();
+          const s3 = createS3Client();
 
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: videoFileName,
-          Body: Buffer.from(videoBuffer),
-          ContentType: "video/mp4",
-        }),
-      );
+          const videoRes = await fetch(videoUrl, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          const videoBuffer = await videoRes.arrayBuffer();
+          const videoFileName = `generated/videos/${Date.now()}.mp4`;
 
-      const permanentUrl = await getFileUrl(videoFileName, true);
+          await s3.send(
+            new PutObjectCommand({
+              Bucket: bucketName,
+              Key: videoFileName,
+              Body: Buffer.from(videoBuffer),
+              ContentType: "video/mp4",
+            }),
+          );
+
+          permanentUrl = (await getFileUrl(videoFileName, true)) ?? videoUrl;
+        } catch (s3Err) {
+          console.error("S3 upload failed, using OpenRouter URL:", s3Err);
+        }
+      }
 
       await prisma.generatedVideo.update({
         where: { id: record.id },
@@ -218,15 +304,13 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         id: record.id,
-        videoUrl,
+        videoUrl: permanentUrl,
         status,
         prompt,
         message:
-          status === "processing"
-            ? "Video is still being processed. Check back shortly."
-            : undefined,
+          status !== "completed" ? "Video generation failed." : undefined,
       });
-    } catch (apiError: any) {
+    } catch (apiError: unknown) {
       console.error("Video API call failed:", apiError);
       await prisma.generatedVideo.update({
         where: { id: record.id },
@@ -243,7 +327,7 @@ export async function POST(request: NextRequest) {
         message: "Video generation failed.",
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Video generation error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

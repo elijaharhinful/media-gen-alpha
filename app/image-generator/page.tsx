@@ -22,9 +22,14 @@ const styles = [
 
 const aspectRatios = [
   { value: '1:1', label: '1:1', desc: 'Square' },
+  { value: '2:3', label: '2:3', desc: 'Portrait' },
+  { value: '3:2', label: '3:2', desc: 'Landscape' },
+  { value: '4:3', label: '4:3', desc: 'Classic' },
+  { value: '3:4', label: '3:4', desc: 'Classic' },
+  { value: '4:5', label: '4:5', desc: 'Portrait'},
+  { value: '5:4', label: '5:4', desc: 'Landscape'},
   { value: '16:9', label: '16:9', desc: 'Landscape' },
   { value: '9:16', label: '9:16', desc: 'Portrait' },
-  { value: '4:3', label: '4:3', desc: 'Classic' },
 ];
 
 const examplePrompts = [
@@ -189,9 +194,6 @@ export default function ImageGeneratorPage() {
           <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3">
             Image <span className="text-lime-400">Generator</span>
           </h1>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            Generate stunning images from text prompts with advanced AI.
-          </p>
         </div>
       </section>
 
@@ -264,7 +266,7 @@ export default function ImageGeneratorPage() {
                     <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
                       <Ratio className="h-3.5 w-3.5" /> Aspect Ratio
                     </label>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                       {aspectRatios.map(ar => (
                         <button
                           key={ar.value}
