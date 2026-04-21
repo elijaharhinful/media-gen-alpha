@@ -227,6 +227,13 @@ export async function POST(request: NextRequest) {
       const submissionData = await response.json();
       const jobId: string = submissionData?.id ?? "";
 
+      if (jobId) {
+        await prisma.generatedVideo.update({
+          where: { id: record.id },
+          data: { jobId },
+        });
+      }
+
       if (!jobId) {
         await prisma.generatedVideo.update({
           where: { id: record.id },
