@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/videos/recover-stuck",
-      "schedule": "*/2 * * * *"
-    }
-  ]
-}
