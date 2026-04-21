@@ -24,7 +24,7 @@ async function pollVideoStatus(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "HTTP-Referer": "https://movie-gen-alpha.app",
-        "X-Title": "Movie Gen Alpha – Video Generator",
+        "X-Title": "Movie Gen Alpha - Video Generator",
       },
     });
 
