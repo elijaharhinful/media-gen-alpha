@@ -72,6 +72,13 @@ async function recoverVideo(
   });
 
   if (!res.ok) {
+    if (res.status === 404) {
+      await prisma.generatedVideo.update({
+        where: { id: record.id },
+        data: { status: "failed" },
+      });
+      return { status: "failed", reason: "job_expired" };
+    }
     return { status: "poll_failed", httpStatus: res.status };
   }
 

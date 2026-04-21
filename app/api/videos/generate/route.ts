@@ -41,7 +41,6 @@ async function pollVideoStatus(
       console.error("Video generation failed:", data?.error);
       return { videoUrl: "", status: "failed" };
     }
-    // "pending" | "in_progress" → keep polling
   }
 
   return { videoUrl: "", status: "processing" };
@@ -62,18 +61,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       prompt,
-      inputMode, // "keyframe" | "reference"
-      // keyframe mode — resolved public URLs sent from client
+      inputMode,
       startFrameUrl,
       endFrameUrl,
-      // reference mode — arrays of resolved public URLs
-      referenceImages, // string[]  max 9
-      referenceVideos, // string[]  max 3  (requires model that supports video refs)
-      referenceAudios, // string[]  max 3  (requires ≥1 image or video ref)
-      // settings
+      referenceImages,
+      referenceVideos,
+      referenceAudios,
       resolution,
       aspectRatio,
-      duration, // integer seconds
+      duration,
     } = body ?? {};
 
     if (!prompt?.trim()) {
@@ -130,7 +126,7 @@ export async function POST(request: NextRequest) {
         duration: durationSeconds,
       };
 
-      // ── KEYFRAME MODE ────────────────────────────────────────────────────
+      // KEYFRAME MODE
       if (inputMode === "keyframe" && startFrameUrl) {
         const frameImages: Array<{
           type: string;
@@ -153,7 +149,7 @@ export async function POST(request: NextRequest) {
         requestBody.frame_images = frameImages;
       }
 
-      // ── REFERENCE MODE ───────────────────────────────────────────────────
+      // REFERENCE MODE
       if (inputMode === "reference") {
         const imgUrls: string[] = await Promise.all(
           (referenceImages ?? []).map(resolveUrl),
@@ -165,7 +161,6 @@ export async function POST(request: NextRequest) {
           (referenceAudios ?? []).map(resolveUrl),
         );
 
-        // Image refs → OpenRouter normalized input_references field
         if (imgUrls.length > 0) {
           requestBody.input_references = imgUrls.map((url) => ({
             type: "image_url",
@@ -173,11 +168,6 @@ export async function POST(request: NextRequest) {
           }));
         }
 
-        // Video + audio refs → provider passthrough.
-        // OpenRouter's normalized schema only covers image refs. Video/audio
-        // must go via provider options passthrough using the Seedance upstream
-        // format (separate video_urls / audio_urls arrays).
-        // Note: audio requires at least one image or video ref alongside it.
         if (vidUrls.length > 0 || audUrls.length > 0) {
           requestBody.provider = {
             options: {
@@ -192,7 +182,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // ── SUBMIT ───────────────────────────────────────────────────────────
+      // SUBMIT
       const response = await fetch(`${OPENROUTER_BASE}/api/v1/videos`, {
         method: "POST",
         headers: {
@@ -223,7 +213,6 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 202 Accepted → { id, polling_url, status }
       const submissionData = await response.json();
       const jobId: string = submissionData?.id ?? "";
 
@@ -251,7 +240,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // ── POLL ─────────────────────────────────────────────────────────────
+      // POLL
       const { videoUrl, status } = await pollVideoStatus(jobId, apiKey);
 
       if (status === "processing") {
@@ -271,7 +260,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // ── UPLOAD TO S3 ─────────────────────────────────────────────────────
+      // UPLOAD TO S3
       let permanentUrl = videoUrl;
       if (status === "completed" && videoUrl) {
         try {
