@@ -1,7 +1,8 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Film, Loader2, AlertCircle, Play, Clock } from 'lucide-react';
+import { Film, Loader2, AlertCircle, Play, Clock, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 interface VideoResult {
   id?: string;
@@ -70,9 +71,17 @@ export function ResultPanel({ loading, result, history, onSelectHistory }: Resul
       {/* Recent videos */}
       {history.length > 0 && (
         <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-4">
-          <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5" /> Recent Videos
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" /> Recent Videos
+            </p>
+            <Link
+              href="/library?type=videos"
+              className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 transition-colors font-medium"
+            >
+              View all <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
           <div className="flex flex-col gap-2">
             {history.slice(0, 5).map((vid, i) => (
               <button

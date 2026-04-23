@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette, Upload, X } from 'lucide-react';
+import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette, Upload, X, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import Image from 'next/image';
+import Link from 'next/link';
 
 const styles = [
   { value: '', label: 'Default' },
@@ -71,7 +72,7 @@ export default function ImageGeneratorPage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      fetch('/api/images/history?limit=6')
+      fetch('/api/images/history?limit=3')
         .then(r => r.json())
         .then(d => setHistory(d.images || []))
         .catch(() => {});
@@ -168,7 +169,7 @@ export default function ImageGeneratorPage() {
 
       if (data.imageUrl) {
         setResult(data);
-        setHistory(prev => [data, ...prev].slice(0, 6));
+        setHistory(prev => [data, ...prev].slice(0, 3));
         toast.success('Image generated!');
       } else {
         toast.error('No image was returned');
@@ -374,11 +375,19 @@ export default function ImageGeneratorPage() {
               {/* Recent History */}
               {history.length > 0 && (
                 <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-4">
-                  <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" /> Recent
-                  </p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" /> Recent
+                    </p>
+                    <Link
+                      href="/library?type=images"
+                      className="flex items-center gap-1 text-xs text-lime-400 hover:text-lime-300 transition-colors font-medium"
+                    >
+                      View all <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {history.filter(h => h.imageUrl).slice(0, 6).map(img => (
+                    {history.filter(h => h.imageUrl).slice(0, 3).map(img => (
                       <button
                         key={img.id}
                         onClick={() => { setResult(img); setImgError(false); }}
