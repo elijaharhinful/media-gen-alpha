@@ -209,7 +209,7 @@ export default function ImageGeneratorPage() {
                   value={prompt}
                   onChange={e => setPrompt(e.target.value)}
                   placeholder="Describe the image you want to create..."
-                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-lime-400/50"
+                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[120px] resize-y focus:outline-none focus:ring-2 focus:ring-lime-400/50"
                   maxLength={2000}
                 />
 

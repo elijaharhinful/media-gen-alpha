@@ -64,16 +64,16 @@ export function MentionTextarea({
   };
 
   const sharedStyle =
-    "w-full bg-background/60 px-4 py-3 text-sm min-h-[110px] " +
+    "w-full bg-background/60 px-4 py-3 text-sm " +
     "leading-relaxed tracking-normal font-sans overflow-auto whitespace-pre-wrap break-words";
 
   return (
-    <div className="relative rounded-xl border border-border bg-background/60 overflow-hidden focus-within:ring-2 focus-within:ring-purple-400/40 transition-all">
+    <div className={`relative rounded-xl border border-border bg-background/60 overflow-hidden focus-within:ring-2 focus-within:ring-purple-400/40 transition-all resize-y min-h-[110px] ${className}`}>
       {/* Highlight overlay */}
       <div
         ref={overlayRef}
         aria-hidden="true"
-        className={`${sharedStyle} absolute inset-0 pointer-events-none select-none resize-none`}
+        className={`${sharedStyle} absolute inset-0 h-full pointer-events-none select-none`}
         style={{ color: "inherit" }}
         dangerouslySetInnerHTML={{ __html: buildHighlightedHtml(value) || "" }}
       />
@@ -85,7 +85,7 @@ export function MentionTextarea({
         onChange={(e) => onChange(e.target.value)}
         onScroll={syncScroll}
         placeholder={placeholder}
-        className={`${sharedStyle} relative z-10 resize-none focus:outline-none bg-transparent ${className}`}
+        className={`${sharedStyle} relative z-10 resize-none focus:outline-none bg-transparent w-full h-full min-h-[110px]`}
         style={{ color: "transparent", caretColor: "white" }}
       />
     </div>
