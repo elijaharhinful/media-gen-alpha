@@ -138,6 +138,27 @@ export function SiteHeader() {
   const { data: session, status } = useSession() || {};
   const isAdmin = (session?.user as any)?.role === 'ADMIN';
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeTaskCount, setActiveTaskCount] = useState(0);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+
+    const fetchActiveCount = async () => {
+      try {
+        const res = await fetch('/api/tasks/active-count');
+        const data = await res.json();
+        if (data.activeCount !== undefined) {
+          setActiveTaskCount(data.activeCount);
+        }
+      } catch (err) {
+        // Silent fail for polling
+      }
+    };
+
+    fetchActiveCount();
+    const interval = setInterval(fetchActiveCount, 10000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   // Don't show header on login/signup pages
   if (pathname === '/login' || pathname === '/signup') return null;
@@ -171,6 +192,11 @@ export function SiteHeader() {
                 >
                   <Icon className="h-4 w-4" />
                   <span>{item.label}</span>
+                  {item.href === '/tasks' && activeTaskCount > 0 && (
+                    <span className="ml-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-black">
+                      {activeTaskCount}
+                    </span>
+                  )}
                   {isActive && (
                     <motion.div
                       layoutId="active-nav"
@@ -250,6 +276,11 @@ export function SiteHeader() {
                   >
                     <Icon className="h-4 w-4" />
                     {item.label}
+                    {item.href === '/tasks' && activeTaskCount > 0 && (
+                      <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-black">
+                        {activeTaskCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

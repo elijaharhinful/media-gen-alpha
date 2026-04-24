@@ -5,46 +5,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canUserUseTool, recordCreditUsage } from "@/lib/credits";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { createS3Client, getBucketConfig } from "@/lib/aws-config";
 import { getFileUrl } from "@/lib/s3";
 
 const OPENROUTER_BASE = "https://openrouter.ai";
 
-async function pollVideoStatus(
-  jobId: string,
-  apiKey: string,
-  maxAttempts = 20,
-  intervalMs = 30000,
-): Promise<{ videoUrl: string; status: string }> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise((r) => setTimeout(r, intervalMs));
-
-    const res = await fetch(`${OPENROUTER_BASE}/api/v1/videos/${jobId}`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://movie-gen-alpha.app",
-        "X-Title": "Movie Gen Alpha - Video Generator",
-      },
-    });
-
-    if (!res.ok) continue;
-
-    const data = await res.json();
-    const status: string = data?.status ?? "pending";
-
-    if (status === "completed") {
-      return { videoUrl: data?.unsigned_urls?.[0] ?? "", status: "completed" };
-    }
-
-    if (status === "failed" || status === "error") {
-      console.error("Video generation failed:", data?.error);
-      return { videoUrl: "", status: "failed" };
-    }
-  }
-
-  return { videoUrl: "", status: "processing" };
-}
 
 async function resolveUrl(path: string): Promise<string> {
   if (path.startsWith("http")) return path;
@@ -219,93 +183,33 @@ export async function POST(request: NextRequest) {
       if (jobId) {
         await prisma.generatedVideo.update({
           where: { id: record.id },
-          data: { jobId },
+          data: { jobId, status: "processing" },
         });
-      }
-
-      if (!jobId) {
-        await prisma.generatedVideo.update({
-          where: { id: record.id },
-          data: { status: "processing" },
-        });
+        
         await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
           videoId: record.id,
           prompt: prompt.substring(0, 100),
         });
+        
         return NextResponse.json({
           id: record.id,
           status: "processing",
           prompt,
           message: "Video is being processed. Check back shortly.",
         });
-      }
-
-      // POLL
-      const { videoUrl, status } = await pollVideoStatus(jobId, apiKey);
-
-      if (status === "processing") {
+      } else {
         await prisma.generatedVideo.update({
           where: { id: record.id },
-          data: { status: "processing" },
+          data: { status: "failed" },
         });
-        await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
-          videoId: record.id,
-          prompt: prompt.substring(0, 100),
-        });
+        
         return NextResponse.json({
           id: record.id,
-          status: "processing",
+          status: "failed",
           prompt,
-          message: "Video is still being processed. Check back shortly.",
+          message: "Failed to get job ID from generation service.",
         });
       }
-
-      // UPLOAD TO S3
-      let permanentUrl = videoUrl;
-      if (status === "completed" && videoUrl) {
-        try {
-          const { bucketName } = getBucketConfig();
-          const s3 = createS3Client();
-
-          const videoRes = await fetch(videoUrl, {
-            headers: { Authorization: `Bearer ${apiKey}` },
-          });
-          const videoBuffer = await videoRes.arrayBuffer();
-          const videoFileName = `generated/videos/${Date.now()}.mp4`;
-
-          await s3.send(
-            new PutObjectCommand({
-              Bucket: bucketName,
-              Key: videoFileName,
-              Body: Buffer.from(videoBuffer),
-              ContentType: "video/mp4",
-            }),
-          );
-
-          permanentUrl = (await getFileUrl(videoFileName, true)) ?? videoUrl;
-        } catch (s3Err) {
-          console.error("S3 upload failed, using OpenRouter URL:", s3Err);
-        }
-      }
-
-      await prisma.generatedVideo.update({
-        where: { id: record.id },
-        data: { videoUrl: permanentUrl || null, status },
-      });
-
-      await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
-        videoId: record.id,
-        prompt: prompt.substring(0, 100),
-      });
-
-      return NextResponse.json({
-        id: record.id,
-        videoUrl: permanentUrl,
-        status,
-        prompt,
-        message:
-          status !== "completed" ? "Video generation failed." : undefined,
-      });
     } catch (apiError: unknown) {
       console.error("Video API call failed:", apiError);
       await prisma.generatedVideo.update({
