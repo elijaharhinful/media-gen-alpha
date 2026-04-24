@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, Suspense, useRef } from "react";
+import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -530,14 +531,8 @@ function LibraryInner() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
 
-  const [images, setImages] = useState<ImageItem[]>([]);
-  const [videos, setVideos] = useState<VideoItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [imgPage, setImgPage] = useState(1);
   const [vidPage, setVidPage] = useState(1);
-  const [imgTotal, setImgTotal] = useState(0);
-  const [vidTotal, setVidTotal] = useState(0);
 
   const LIMIT = 24;
 
@@ -545,27 +540,23 @@ function LibraryInner() {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
-  const fetchImages = useCallback(async (page: number) => {
-    const res = await fetch(`/api/images/history?page=${page}&limit=${LIMIT}`);
-    const d = await res.json();
-    setImages((d.images || []).map((i: any) => ({ ...i, type: "image" })));
-    setImgTotal(d.total || 0);
-  }, []);
+  const { data: imgData, isLoading: imgLoading } = useSWR(
+    status === "authenticated" ? `/api/images/history?page=${imgPage}&limit=${LIMIT}` : null,
+    (url: string) => fetch(url).then((r) => r.json()),
+    { keepPreviousData: true }
+  );
 
-  const fetchVideos = useCallback(async (page: number) => {
-    const res = await fetch(`/api/videos/history?page=${page}&limit=${LIMIT}`);
-    const d = await res.json();
-    setVideos((d.videos || []).map((v: any) => ({ ...v, type: "video" })));
-    setVidTotal(d.total || 0);
-  }, []);
+  const { data: vidData, isLoading: vidLoading } = useSWR(
+    status === "authenticated" ? `/api/videos/history?page=${vidPage}&limit=${LIMIT}` : null,
+    (url: string) => fetch(url).then((r) => r.json()),
+    { keepPreviousData: true }
+  );
 
-  useEffect(() => {
-    if (status !== "authenticated") return;
-    setLoading(true);
-    Promise.all([fetchImages(imgPage), fetchVideos(vidPage)]).finally(() =>
-      setLoading(false),
-    );
-  }, [status, imgPage, vidPage, fetchImages, fetchVideos]);
+  const images: ImageItem[] = (imgData?.images || []).map((i: any) => ({ ...i, type: "image" }));
+  const videos: VideoItem[] = (vidData?.videos || []).map((v: any) => ({ ...v, type: "video" }));
+  const imgTotal = imgData?.total || 0;
+  const vidTotal = vidData?.total || 0;
+  const loading = imgLoading || vidLoading || status === "loading";
 
   // Derived — merge + filter + sort
   const allItems: MediaItem[] = (() => {

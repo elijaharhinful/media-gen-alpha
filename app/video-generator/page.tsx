@@ -1,48 +1,68 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { Film, Sparkles, Loader2, Clapperboard, Layers } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
+import { useState, useEffect } from "react";
+import useSWR from "swr";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { Film, Sparkles, Loader2, Clapperboard, Layers } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
-import { MentionTextarea } from '@/components/video-generator/MentionTextarea';
-import { KeyframeInput } from '@/components/video-generator/KeyframeInput';
-import { ReferenceInput, MediaRef } from '@/components/video-generator/ReferenceInput';
-import { VideoSettings } from '@/components/video-generator/VideoSettings';
-import { ResultPanel } from '@/components/video-generator/ResultPanel';
-import type { FrameImage } from '@/components/video-generator/FrameSlot';
+import { MentionTextarea } from "@/components/video-generator/MentionTextarea";
+import { KeyframeInput } from "@/components/video-generator/KeyframeInput";
+import {
+  ReferenceInput,
+  MediaRef,
+} from "@/components/video-generator/ReferenceInput";
+import { VideoSettings } from "@/components/video-generator/VideoSettings";
+import { ResultPanel } from "@/components/video-generator/ResultPanel";
+import type { FrameImage } from "@/components/video-generator/FrameSlot";
 
-type InputMode = 'keyframe' | 'reference';
+type InputMode = "keyframe" | "reference";
 
-function ModeTab({ active, onClick, icon, label }: {
-  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
+function ModeTab({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
 }) {
   return (
     <button
       onClick={onClick}
       className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors border-b-2 ${
-        active ? 'border-purple-400 text-purple-400 bg-purple-400/5' : 'border-transparent text-muted-foreground hover:text-foreground'
+        active
+          ? "border-purple-400 text-purple-400 bg-purple-400/5"
+          : "border-transparent text-muted-foreground hover:text-foreground"
       }`}
     >
-      {icon}{label}
+      {icon}
+      {label}
     </button>
   );
 }
 
 const uploadFile = async (file: File): Promise<string> => {
-  const presignRes = await fetch('/api/upload/presigned', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileName: file.name, contentType: file.type, isPublic: true }),
+  const presignRes = await fetch("/api/upload/presigned", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fileName: file.name,
+      contentType: file.type,
+      isPublic: true,
+    }),
   });
   const { uploadUrl, cloud_storage_path } = await presignRes.json();
   const url = new URL(uploadUrl);
-  const signedHeaders = url.searchParams.get('X-Amz-SignedHeaders') || '';
-  const headers: Record<string, string> = { 'Content-Type': file.type };
-  if (signedHeaders.includes('content-disposition')) headers['Content-Disposition'] = 'attachment';
-  await fetch(uploadUrl, { method: 'PUT', headers, body: file });
+  const signedHeaders = url.searchParams.get("X-Amz-SignedHeaders") || "";
+  const headers: Record<string, string> = { "Content-Type": file.type };
+  if (signedHeaders.includes("content-disposition"))
+    headers["Content-Disposition"] = "attachment";
+  await fetch(uploadUrl, { method: "PUT", headers, body: file });
   return cloud_storage_path;
 };
 
@@ -50,10 +70,10 @@ export default function VideoGeneratorPage() {
   const { data: session, status } = useSession() || {};
   const router = useRouter();
 
-  const [prompt, setPrompt] = useState('');
-  const [inputMode, setInputMode] = useState<InputMode>('keyframe');
-  const [resolution, setResolution] = useState('720p');
-  const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [prompt, setPrompt] = useState("");
+  const [inputMode, setInputMode] = useState<InputMode>("keyframe");
+  const [resolution, setResolution] = useState("720p");
+  const [aspectRatio, setAspectRatio] = useState("16:9");
   const [duration, setDuration] = useState(5);
 
   const [startFrame, setStartFrame] = useState<FrameImage | null>(null);
@@ -65,25 +85,27 @@ export default function VideoGeneratorPage() {
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.replace('/login');
+    if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      fetch('/api/videos/history?limit=5')
-        .then(r => r.json())
-        .then(d => setHistory(d.videos || []))
-        .catch(() => {});
-    }
-  }, [status]);
+  const { data: historyData, mutate: mutateHistory } = useSWR(
+    status === "authenticated" ? "/api/videos/history?limit=5" : null,
+    (url: string) => fetch(url).then((r) => r.json())
+  );
+  
+  const history = historyData?.videos || [];
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    if (inputMode === 'reference' && refAudios.length > 0 && refImages.length === 0 && refVideos.length === 0) {
-      toast.error('Audio refs require at least one image or video ref');
+    if (
+      inputMode === "reference" &&
+      refAudios.length > 0 &&
+      refImages.length === 0 &&
+      refVideos.length === 0
+    ) {
+      toast.error("Audio refs require at least one image or video ref");
       return;
     }
 
@@ -91,42 +113,54 @@ export default function VideoGeneratorPage() {
     setResult(null);
 
     try {
-      const payload: Record<string, unknown> = { prompt, inputMode, resolution, aspectRatio, duration };
+      const payload: Record<string, unknown> = {
+        prompt,
+        inputMode,
+        resolution,
+        aspectRatio,
+        duration,
+      };
 
-      if (inputMode === 'keyframe') {
-        if (startFrame) payload.startFrameUrl = await uploadFile(startFrame.file);
+      if (inputMode === "keyframe") {
+        if (startFrame)
+          payload.startFrameUrl = await uploadFile(startFrame.file);
         if (endFrame) payload.endFrameUrl = await uploadFile(endFrame.file);
       } else {
         const [imgPaths, vidPaths, audPaths] = await Promise.all([
-          Promise.all(refImages.map(r => uploadFile(r.file))),
-          Promise.all(refVideos.map(r => uploadFile(r.file))),
-          Promise.all(refAudios.map(r => uploadFile(r.file))),
+          Promise.all(refImages.map((r) => uploadFile(r.file))),
+          Promise.all(refVideos.map((r) => uploadFile(r.file))),
+          Promise.all(refAudios.map((r) => uploadFile(r.file))),
         ]);
         if (imgPaths.length) payload.referenceImages = imgPaths;
         if (vidPaths.length) payload.referenceVideos = vidPaths;
         if (audPaths.length) payload.referenceAudios = audPaths;
       }
 
-      const res = await fetch('/api/videos/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/videos/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
 
-      if (!res.ok) { toast.error(data.error || 'Generation failed'); return; }
+      if (!res.ok) {
+        toast.error(data.error || "Generation failed");
+        return;
+      }
       setResult(data);
-      if (data.status === 'completed') toast.success('Video generated!');
-      else if (data.status === 'processing') toast.info('Video is being processed...');
-      else toast.info(data.message || 'Request saved');
+      mutateHistory();
+      if (data.status === "completed") toast.success("Video generated!");
+      else if (data.status === "processing")
+        toast.info("Video is being processed...");
+      else toast.info(data.message || "Request saved");
     } catch {
-      toast.error('Something went wrong');
+      toast.error("Something went wrong");
     } finally {
       setLoading(false);
     }
   };
 
-  if (status === 'loading' || status === 'unauthenticated') {
+  if (status === "loading" || status === "unauthenticated") {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
@@ -139,7 +173,7 @@ export default function VideoGeneratorPage() {
       <section className="pt-12 pb-6 px-4">
         <div className="mx-auto max-w-[960px] text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-purple-400/20 bg-purple-400/10 px-4 py-1.5 text-sm text-purple-400 mb-4">
-            <Film className="h-3.5 w-3.5" /> Powered by Seedance 2.0
+            <Film className="h-3.5 w-3.5" /> Veo 1.0
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-3">
             Video <span className="text-purple-400">Generator</span>
@@ -150,30 +184,42 @@ export default function VideoGeneratorPage() {
       <section className="pb-16 px-4">
         <div className="mx-auto max-w-[960px]">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-6">
-
             {/* Input panel */}
             <div className="space-y-4">
               <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm overflow-hidden">
-
                 {/* Mode tabs */}
                 <div className="flex border-b border-border/50">
-                  <ModeTab active={inputMode === 'keyframe'} onClick={() => setInputMode('keyframe')}
-                    icon={<Clapperboard className="h-3.5 w-3.5" />} label="Keyframe" />
-                  <ModeTab active={inputMode === 'reference'} onClick={() => setInputMode('reference')}
-                    icon={<Layers className="h-3.5 w-3.5" />} label="Reference" />
+                  <ModeTab
+                    active={inputMode === "keyframe"}
+                    onClick={() => setInputMode("keyframe")}
+                    icon={<Clapperboard className="h-3.5 w-3.5" />}
+                    label="Keyframe"
+                  />
+                  <ModeTab
+                    active={inputMode === "reference"}
+                    onClick={() => setInputMode("reference")}
+                    icon={<Layers className="h-3.5 w-3.5" />}
+                    label="Reference"
+                  />
                 </div>
 
                 <div className="p-5 space-y-4">
                   <AnimatePresence mode="wait">
-                    {inputMode === 'keyframe' ? (
+                    {inputMode === "keyframe" ? (
                       <KeyframeInput
-                        startFrame={startFrame} endFrame={endFrame}
-                        onStartFrameChange={setStartFrame} onEndFrameChange={setEndFrame}
+                        startFrame={startFrame}
+                        endFrame={endFrame}
+                        onStartFrameChange={setStartFrame}
+                        onEndFrameChange={setEndFrame}
                       />
                     ) : (
                       <ReferenceInput
-                        refImages={refImages} refVideos={refVideos} refAudios={refAudios}
-                        onImagesChange={setRefImages} onVideosChange={setRefVideos} onAudiosChange={setRefAudios}
+                        refImages={refImages}
+                        refVideos={refVideos}
+                        refAudios={refAudios}
+                        onImagesChange={setRefImages}
+                        onVideosChange={setRefVideos}
+                        onAudiosChange={setRefAudios}
                       />
                     )}
                   </AnimatePresence>
@@ -185,8 +231,12 @@ export default function VideoGeneratorPage() {
                   />
 
                   <VideoSettings
-                    resolution={resolution} aspectRatio={aspectRatio} duration={duration}
-                    onResolutionChange={setResolution} onAspectRatioChange={setAspectRatio} onDurationChange={setDuration}
+                    resolution={resolution}
+                    aspectRatio={aspectRatio}
+                    duration={duration}
+                    onResolutionChange={setResolution}
+                    onAspectRatioChange={setAspectRatio}
+                    onDurationChange={setDuration}
                   />
 
                   <button
@@ -194,10 +244,16 @@ export default function VideoGeneratorPage() {
                     disabled={loading || !prompt.trim()}
                     className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-violet-500 px-4 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40"
                   >
-                    {loading
-                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
-                      : <><Sparkles className="h-4 w-4" /> Generate</>
-                    }
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />{" "}
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" /> Generate
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -210,7 +266,6 @@ export default function VideoGeneratorPage() {
               history={history}
               onSelectHistory={setResult}
             />
-
           </div>
         </div>
       </section>

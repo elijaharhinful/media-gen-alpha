@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import useSWR from 'swr';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette, Upload, X, ArrowRight } from 'lucide-react';
@@ -63,21 +64,18 @@ export default function ImageGeneratorPage() {
   const [refImages, setRefImages] = useState<RefImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GeneratedImageResult | null>(null);
-  const [history, setHistory] = useState<GeneratedImageResult[]>([]);
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login');
   }, [status, router]);
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      fetch('/api/images/history?limit=3')
-        .then(r => r.json())
-        .then(d => setHistory(d.images || []))
-        .catch(() => {});
-    }
-  }, [status]);
+  const { data: historyData, mutate: mutateHistory } = useSWR(
+    status === 'authenticated' ? '/api/images/history?limit=3' : null,
+    (url: string) => fetch(url).then(r => r.json())
+  );
+  
+  const history: GeneratedImageResult[] = historyData?.images || [];
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -169,7 +167,7 @@ export default function ImageGeneratorPage() {
 
       if (data.imageUrl) {
         setResult(data);
-        setHistory(prev => [data, ...prev].slice(0, 3));
+        mutateHistory();
         toast.success('Image generated!');
       } else {
         toast.error('No image was returned');

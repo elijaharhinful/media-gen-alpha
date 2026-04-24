@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -200,52 +201,43 @@ export default function TasksPage() {
   const router = useRouter();
 
   const [tab, setTab] = useState<TaskTab>("active");
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
-  const fetchTasks = useCallback(async () => {
-    if (status !== "authenticated") return;
-    try {
-      const [imgRes, vidRes] = await Promise.all([
-        fetch("/api/images/history?limit=50"),
-        fetch("/api/videos/history?limit=50"),
-      ]);
-      const imgData = await imgRes.json();
-      const vidData = await vidRes.json();
+  const fetcher = async () => {
+    const [imgRes, vidRes] = await Promise.all([
+      fetch("/api/images/history?limit=50"),
+      fetch("/api/videos/history?limit=50"),
+    ]);
+    const imgData = await imgRes.json();
+    const vidData = await vidRes.json();
 
-      const imageTasks: Task[] = (imgData.images || []).map((i: any) => ({
-        ...i,
-        type: "image",
-      }));
-      const videoTasks: Task[] = (vidData.videos || []).map((v: any) => ({
-        ...v,
-        type: "video",
-      }));
+    const imageTasks: Task[] = (imgData.images || []).map((i: any) => ({
+      ...i,
+      type: "image",
+    }));
+    const videoTasks: Task[] = (vidData.videos || []).map((v: any) => ({
+      ...v,
+      type: "video",
+    }));
 
-      const all = [...imageTasks, ...videoTasks].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      setTasks(all);
-      setLastRefresh(new Date());
-    } catch (e) {
-      console.error("Failed to fetch tasks", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [status]);
+    const all = [...imageTasks, ...videoTasks].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return all;
+  };
 
-  // Initial load + 10s polling
-  useEffect(() => {
-    fetchTasks();
-    const interval = setInterval(fetchTasks, 10000);
-    return () => clearInterval(interval);
-  }, [fetchTasks]);
+  const { data: tasksData, isLoading, mutate } = useSWR(
+    status === "authenticated" ? "tasks_all" : null,
+    fetcher,
+    { refreshInterval: 10000, onSuccess: () => setLastRefresh(new Date()) }
+  );
+
+  const tasks = tasksData || [];
+  const loading = isLoading || status === "loading";
 
   const activeTasks = tasks.filter(
     (t) => t.status === "processing" || t.status === "pending",
@@ -275,10 +267,7 @@ export default function TasksPage() {
               </p>
             </div>
             <button
-              onClick={() => {
-                setLoading(true);
-                fetchTasks();
-              }}
+              onClick={() => mutate()}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/50 bg-white/5 hover:bg-white/10 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
