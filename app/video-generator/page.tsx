@@ -97,6 +97,41 @@ export default function VideoGeneratorPage() {
   
   const history = historyData?.videos || [];
 
+  // Poll for active video generation result
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (result?.id && result?.status === "processing") {
+      intervalId = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/videos/${result.id}/sync`, {
+            method: "POST",
+          });
+          if (!res.ok) return;
+
+          const data = await res.json();
+          if (data.status === "completed" || data.status === "failed") {
+            setResult((prev: any) => ({ ...prev, ...data }));
+            mutateHistory();
+            clearInterval(intervalId);
+            
+            if (data.status === "completed") {
+              toast.success("Video generation complete!");
+            } else if (data.status === "failed") {
+              toast.error("Video generation failed.");
+            }
+          }
+        } catch (error) {
+          console.error("Polling sync error:", error);
+        }
+      }, 10000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [result?.id, result?.status, mutateHistory]);
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     if (

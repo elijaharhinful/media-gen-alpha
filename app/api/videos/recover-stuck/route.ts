@@ -25,7 +25,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No API key" }, { status: 500 });
   }
 
-  // Fetch all stuck records that have a jobId
+  // 1. Clean up permanently stuck tasks (older than 30 minutes)
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+  await prisma.generatedVideo.updateMany({
+    where: {
+      status: { in: ["processing", "pending"] },
+      createdAt: { lt: thirtyMinutesAgo },
+    },
+    data: {
+      status: "failed",
+    },
+  });
+
+  // 2. Fetch all stuck records that have a jobId
   // Cap at 20 per run to avoid timeout
   const stuckRecords = await prisma.generatedVideo.findMany({
     where: {

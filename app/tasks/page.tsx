@@ -242,6 +242,25 @@ export default function TasksPage() {
   const activeTasks = tasks.filter(
     (t) => t.status === "processing" || t.status === "pending",
   );
+
+  // Poll OpenRouter for active *video* tasks specifically
+  useEffect(() => {
+    const activeVideoTasks = activeTasks.filter((t) => t.type === "video");
+    if (activeVideoTasks.length === 0) return;
+
+    const intervalId = setInterval(() => {
+      activeVideoTasks.forEach((task) => {
+        fetch(`/api/videos/${task.id}/sync`, { method: "POST" }).catch(
+          (err) => console.error(`Sync error for ${task.id}:`, err)
+        );
+      });
+      // The SWR hook handles re-fetching the history globally every 10s, 
+      // so we just need to blindly trigger the syncs here.
+    }, 15000); // 15 seconds
+
+    return () => clearInterval(intervalId);
+  }, [tasksData]); // using tasksData to prevent resetting on every render
+
   const displayedTasks = tab === "active" ? activeTasks : tasks;
 
   if (status === "loading" || status === "unauthenticated") {
