@@ -11,7 +11,7 @@ export const MENTION_COLORS = [
   "#c084fc", // violet  — 9
 ];
 
-export type MentionType = "image" | "video" | "audio";
+export type MentionType = "image" | "video" | "audio" | "character";
 
 /** Returns the color for a 1-based index */
 export function getMentionColor(index: number): string {
@@ -33,7 +33,7 @@ export type Segment =
     };
 
 export function parsePromptSegments(text: string): Segment[] {
-  const regex = /@(image|video|audio)(\d+)/gi;
+  const regex = /@(image|video|audio)(\d+)|@([a-zA-Z0-9_-]+)/gi;
   const segments: Segment[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -45,15 +45,29 @@ export function parsePromptSegments(text: string): Segment[] {
         value: text.slice(lastIndex, match.index),
       });
     }
-    const mentionType = match[1].toLowerCase() as MentionType;
-    const index = parseInt(match[2], 10);
-    segments.push({
-      type: "mention",
-      raw: match[0],
-      mentionType,
-      index,
-      color: getMentionColor(index),
-    });
+
+    if (match[1] && match[2]) {
+      // It's a media mention: @image1
+      const mentionType = match[1].toLowerCase() as MentionType;
+      const index = parseInt(match[2], 10);
+      segments.push({
+        type: "mention",
+        raw: match[0],
+        mentionType,
+        index,
+        color: getMentionColor(index),
+      });
+    } else if (match[3]) {
+      // It's a character mention: @JohnDoe
+      segments.push({
+        type: "mention",
+        raw: match[0],
+        mentionType: "character",
+        index: match[3].length, // arbitrary for color
+        color: getMentionColor(match[3].length),
+      });
+    }
+
     lastIndex = match.index + match[0].length;
   }
 

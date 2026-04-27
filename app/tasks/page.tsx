@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Sparkles,
   AlertTriangle,
+  Users,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -22,7 +23,7 @@ import Link from "next/link";
 // Types ─────────────────────────────────────────────────────
 interface Task {
   id: string;
-  type: "image" | "video";
+  type: "image" | "video" | "character";
   prompt: string;
   status: string;
   createdAt: string;
@@ -67,12 +68,14 @@ function TaskCard({ task }: { task: Task }) {
   };
 
   const cfg = statusConfig[task.status] ?? statusConfig.pending;
-  const typeColor = task.type === "image" ? "text-lime-400" : "text-purple-400";
+  const typeColor = task.type === "image" ? "text-lime-400" : task.type === "video" ? "text-purple-400" : "text-pink-400";
   const typeBg =
     task.type === "image"
       ? "bg-lime-400/10 border-lime-400/20"
-      : "bg-purple-400/10 border-purple-400/20";
-  const TypeIcon = task.type === "image" ? ImageIcon : Film;
+      : task.type === "video"
+      ? "bg-purple-400/10 border-purple-400/20"
+      : "bg-pink-400/10 border-pink-400/20";
+  const TypeIcon = task.type === "image" ? ImageIcon : task.type === "video" ? Film : Users;
 
   // Relative time
   const relTime = (() => {
@@ -127,7 +130,7 @@ function TaskCard({ task }: { task: Task }) {
             <span
               className={`text-[10px] font-semibold uppercase tracking-wide ${typeColor}`}
             >
-              {task.type === "image" ? "Image Generation" : "Video Generation"}
+              {task.type === "image" ? "Image Generation" : task.type === "video" ? "Video Generation" : "Character Creation"}
             </span>
             <span className="text-muted-foreground/40">·</span>
             <span className="text-[10px] text-muted-foreground">{relTime}</span>
@@ -208,12 +211,14 @@ export default function TasksPage() {
   }, [status, router]);
 
   const fetcher = async () => {
-    const [imgRes, vidRes] = await Promise.all([
+    const [imgRes, vidRes, charRes] = await Promise.all([
       fetch("/api/images/history?limit=50"),
       fetch("/api/videos/history?limit=50"),
+      fetch("/api/characters"),
     ]);
     const imgData = await imgRes.json();
     const vidData = await vidRes.json();
+    const charData = await charRes.json();
 
     const imageTasks: Task[] = (imgData.images || []).map((i: any) => ({
       ...i,
@@ -223,8 +228,13 @@ export default function TasksPage() {
       ...v,
       type: "video",
     }));
+    const charTasks: Task[] = (charData.characters || []).map((c: any) => ({
+      ...c,
+      type: "character",
+      prompt: `Character: ${c.name}`,
+    }));
 
-    const all = [...imageTasks, ...videoTasks].sort(
+    const all = [...imageTasks, ...videoTasks, ...charTasks].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
     return all;

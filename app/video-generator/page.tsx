@@ -4,11 +4,21 @@ import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Film, Sparkles, Loader2, Clapperboard, Layers } from "lucide-react";
+import {
+  Film,
+  Sparkles,
+  Loader2,
+  Clapperboard,
+  Layers,
+  Users,
+} from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
-import { MentionTextarea } from "@/components/video-generator/MentionTextarea";
+import {
+  MentionTextarea,
+  MentionOption,
+} from "@/components/video-generator/MentionTextarea";
 import { KeyframeInput } from "@/components/video-generator/KeyframeInput";
 import {
   ReferenceInput,
@@ -16,6 +26,7 @@ import {
 } from "@/components/video-generator/ReferenceInput";
 import { VideoSettings } from "@/components/video-generator/VideoSettings";
 import { ResultPanel } from "@/components/video-generator/ResultPanel";
+import { CharacterModal } from "@/components/video-generator/CharacterModal";
 import type { FrameImage } from "@/components/video-generator/FrameSlot";
 
 type InputMode = "keyframe" | "reference";
@@ -66,6 +77,41 @@ const uploadFile = async (file: File): Promise<string> => {
   return cloud_storage_path;
 };
 
+// Helper for smart tag syncing
+function rewritePromptMediaTags(
+  prompt: string,
+  oldRefs: MediaRef[],
+  newRefs: MediaRef[],
+  prefix: string,
+): string {
+  let newPrompt = prompt;
+
+  // 1. Replace all existing tags with temporary UUID tags
+  oldRefs.forEach((ref, index) => {
+    const tag = `@${prefix}${index + 1}`;
+    const tempTag = `__TEMP_${ref.id}__`;
+    newPrompt = newPrompt.replace(new RegExp(tag, "gi"), tempTag);
+  });
+
+  // 2. Replace temp tags with their new correct index tags
+  newRefs.forEach((ref, index) => {
+    const tempTag = `__TEMP_${ref.id}__`;
+    const newTag = `@${prefix}${index + 1}`;
+    newPrompt = newPrompt.replace(new RegExp(tempTag, "g"), newTag);
+  });
+
+  // 3. Clean up deleted refs
+  oldRefs.forEach((ref) => {
+    const tempTag = `__TEMP_${ref.id}__`;
+    newPrompt = newPrompt.replace(
+      new RegExp(tempTag, "g"),
+      `@deleted_${prefix}`,
+    );
+  });
+
+  return newPrompt;
+}
+
 export default function VideoGeneratorPage() {
   const { data: session, status } = useSession() || {};
   const router = useRouter();
@@ -86,16 +132,73 @@ export default function VideoGeneratorPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
 
+  const [charModalOpen, setCharModalOpen] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
   const { data: historyData, mutate: mutateHistory } = useSWR(
     status === "authenticated" ? "/api/videos/history?limit=5" : null,
-    (url: string) => fetch(url).then((r) => r.json())
+    (url: string) => fetch(url).then((r) => r.json()),
   );
-  
+
   const history = historyData?.videos || [];
+
+  const { data: charData, mutate: mutateChars } = useSWR(
+    status === "authenticated" ? "/api/characters" : null,
+    (url: string) => fetch(url).then((r) => r.json()),
+  );
+  const characters = charData?.characters || [];
+
+  // Construct Mention Options
+  const mentionOptions: MentionOption[] = [
+    ...refImages.map((_, i) => ({
+      type: "image" as const,
+      id: `img_${i}`,
+      display: `Image ${i + 1}`,
+      insertText: `image${i + 1}`,
+    })),
+    ...refVideos.map((_, i) => ({
+      type: "video" as const,
+      id: `vid_${i}`,
+      display: `Video ${i + 1}`,
+      insertText: `video${i + 1}`,
+    })),
+    ...refAudios.map((_, i) => ({
+      type: "audio" as const,
+      id: `aud_${i}`,
+      display: `Audio ${i + 1}`,
+      insertText: `audio${i + 1}`,
+    })),
+    ...characters.map((c: any) => ({
+      type: "character" as const,
+      id: c.id,
+      display: `Character: ${c.name}`,
+      insertText: c.name.replace(/\s+/g, ""),
+    })),
+  ];
+
+  const handleImagesChange = (newRefs: MediaRef[]) => {
+    setPrompt((prev) =>
+      rewritePromptMediaTags(prev, refImages, newRefs, "image"),
+    );
+    setRefImages(newRefs);
+  };
+
+  const handleVideosChange = (newRefs: MediaRef[]) => {
+    setPrompt((prev) =>
+      rewritePromptMediaTags(prev, refVideos, newRefs, "video"),
+    );
+    setRefVideos(newRefs);
+  };
+
+  const handleAudiosChange = (newRefs: MediaRef[]) => {
+    setPrompt((prev) =>
+      rewritePromptMediaTags(prev, refAudios, newRefs, "audio"),
+    );
+    setRefAudios(newRefs);
+  };
 
   // Poll for active video generation result
   useEffect(() => {
@@ -114,7 +217,7 @@ export default function VideoGeneratorPage() {
             setResult((prev: any) => ({ ...prev, ...data }));
             mutateHistory();
             clearInterval(intervalId);
-            
+
             if (data.status === "completed") {
               toast.success("Video generation complete!");
             } else if (data.status === "failed") {
@@ -252,9 +355,9 @@ export default function VideoGeneratorPage() {
                         refImages={refImages}
                         refVideos={refVideos}
                         refAudios={refAudios}
-                        onImagesChange={setRefImages}
-                        onVideosChange={setRefVideos}
-                        onAudiosChange={setRefAudios}
+                        onImagesChange={handleImagesChange}
+                        onVideosChange={handleVideosChange}
+                        onAudiosChange={handleAudiosChange}
                       />
                     )}
                   </AnimatePresence>
@@ -262,22 +365,33 @@ export default function VideoGeneratorPage() {
                   <MentionTextarea
                     value={prompt}
                     onChange={setPrompt}
-                    placeholder="Describe the video you want to generate..."
+                    placeholder="Describe the video you want to generate... Use @ to tag references and characters!"
+                    mentionOptions={mentionOptions}
                   />
 
-                  <VideoSettings
-                    resolution={resolution}
-                    aspectRatio={aspectRatio}
-                    duration={duration}
-                    onResolutionChange={setResolution}
-                    onAspectRatioChange={setAspectRatio}
-                    onDurationChange={setDuration}
-                  />
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <VideoSettings
+                      resolution={resolution}
+                      aspectRatio={aspectRatio}
+                      duration={duration}
+                      onResolutionChange={setResolution}
+                      onAspectRatioChange={setAspectRatio}
+                      onDurationChange={setDuration}
+                    />
+
+                    <button
+                      onClick={() => setCharModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-400/30 bg-purple-400/10 text-purple-400 text-xs font-medium hover:bg-purple-400/20 transition-colors"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      Characters
+                    </button>
+                  </div>
 
                   <button
                     onClick={handleGenerate}
                     disabled={loading || !prompt.trim()}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-violet-500 px-4 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40"
+                    className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-violet-500 px-4 py-3 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-40"
                   >
                     {loading ? (
                       <>
@@ -304,6 +418,13 @@ export default function VideoGeneratorPage() {
           </div>
         </div>
       </section>
+
+      <CharacterModal
+        isOpen={charModalOpen}
+        onClose={() => setCharModalOpen(false)}
+        characters={characters}
+        onRefresh={() => mutateChars()}
+      />
     </div>
   );
 }

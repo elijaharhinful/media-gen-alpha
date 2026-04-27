@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { RefSection, ImageRefThumb, MediaChip, AddThumb } from './RefMedia';
 
 export interface MediaRef {
+  id: string;
   file: File;
   name: string;
   preview?: string;
@@ -32,14 +33,14 @@ export function ReferenceInput({
   const addImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (refImages.length + files.length > 9) { toast.error('Maximum 9 reference images'); return; }
-    onImagesChange([...refImages, ...files.map(f => ({ file: f, name: f.name, preview: URL.createObjectURL(f) }))]);
+    onImagesChange([...refImages, ...files.map(f => ({ id: crypto.randomUUID(), file: f, name: f.name, preview: URL.createObjectURL(f) }))]);
     e.target.value = '';
   };
 
   const addVideos = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (refVideos.length + files.length > 3) { toast.error('Maximum 3 reference videos'); return; }
-    onVideosChange([...refVideos, ...files.map(f => ({ file: f, name: f.name }))]);
+    onVideosChange([...refVideos, ...files.map(f => ({ id: crypto.randomUUID(), file: f, name: f.name }))]);
     e.target.value = '';
   };
 
@@ -47,7 +48,7 @@ export function ReferenceInput({
     const files = Array.from(e.target.files || []);
     if (refAudios.length + files.length > 3) { toast.error('Maximum 3 reference audio files'); return; }
     if (refImages.length === 0 && refVideos.length === 0) toast.warning('Audio refs require at least one image or video ref');
-    onAudiosChange([...refAudios, ...files.map(f => ({ file: f, name: f.name }))]);
+    onAudiosChange([...refAudios, ...files.map(f => ({ id: crypto.randomUUID(), file: f, name: f.name }))]);
     e.target.value = '';
   };
 

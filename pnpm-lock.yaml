@@ -251,6 +251,9 @@ importers:
       tailwind-scrollbar-hide:
         specifier: 1.1.7
         version: 1.1.7
+      textarea-caret:
+        specifier: ^3.1.0
+        version: 3.1.0
       vaul:
         specifier: 0.9.9
         version: 0.9.9(@types/react-dom@18.2.7)(@types/react@18.2.22)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -282,6 +285,9 @@ importers:
       '@types/react-dom':
         specifier: 18.2.7
         version: 18.2.7
+      '@types/textarea-caret':
+        specifier: ^3.0.4
+        version: 3.0.4
       '@typescript-eslint/eslint-plugin':
         specifier: 7.0.0
         version: 7.0.0(@typescript-eslint/parser@7.0.0(eslint@9.24.0(jiti@2.6.1))(typescript@5.2.2))(eslint@9.24.0(jiti@2.6.1))(typescript@5.2.2)
@@ -2282,6 +2288,9 @@ packages:
 
   '@types/supercluster@7.1.3':
     resolution: {integrity: sha512-Z0pOY34GDFl3Q6hUFYf3HkTwKEE02e7QgtJppBt+beEAxnyOpJua+voGFvxINBHa06GwLFFym7gRPY2SiKIfIA==}
+
+  '@types/textarea-caret@3.0.4':
+    resolution: {integrity: sha512-epJGYB37/sNrTDbhfyRjHkXsQSAcO6zby0JBDS0QMt6HQ1f1W2E4YpSc7TQkNmWaWmYXv92zOIfN5PHA8CmThg==}
 
   '@typescript-eslint/eslint-plugin@7.0.0':
     resolution: {integrity: sha512-M72SJ0DkcQVmmsbqlzc6EJgb/3Oz2Wdm6AyESB4YkGgCxP8u5jt5jn4/OBMPK3HLOxcttZq5xbBBU7e2By4SZQ==}
@@ -5182,6 +5191,9 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  textarea-caret@3.1.0:
+    resolution: {integrity: sha512-cXAvzO9pP5CGa6NKx0WYHl+8CHKZs8byMkt3PCJBCmq2a34YA9pO1NrQET5pzeqnBjBdToF5No4rrmkDUgQC2Q==}
+
   thenify-all@1.6.0:
     resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
     engines: {node: '>=0.8'}
@@ -7957,6 +7969,8 @@ snapshots:
   '@types/supercluster@7.1.3':
     dependencies:
       '@types/geojson': 7946.0.16
+
+  '@types/textarea-caret@3.0.4': {}
 
   '@typescript-eslint/eslint-plugin@7.0.0(@typescript-eslint/parser@7.0.0(eslint@9.24.0(jiti@2.6.1))(typescript@5.2.2))(eslint@9.24.0(jiti@2.6.1))(typescript@5.2.2)':
     dependencies:
@@ -11313,6 +11327,8 @@ snapshots:
       acorn: 8.16.0
       commander: 2.20.3
       source-map-support: 0.5.21
+
+  textarea-caret@3.1.0: {}
 
   thenify-all@1.6.0:
     dependencies:
