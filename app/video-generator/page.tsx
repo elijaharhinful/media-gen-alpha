@@ -274,6 +274,15 @@ export default function VideoGeneratorPage() {
         if (audPaths.length) payload.referenceAudios = audPaths;
       }
 
+      const mentionedCharacterImages = characters
+        .filter((c: any) => prompt.includes(`@${c.name.replace(/\\s+/g, "")}`))
+        .flatMap((c: any) => c.images)
+        .filter(Boolean);
+
+      if (mentionedCharacterImages.length > 0) {
+        payload.characterImages = mentionedCharacterImages;
+      }
+
       const res = await fetch("/api/videos/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

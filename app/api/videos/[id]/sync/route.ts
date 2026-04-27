@@ -84,11 +84,15 @@ export async function POST(
     const rawVideoUrl: string = data?.unsigned_urls?.[0] ?? "";
 
     if (orStatus === "failed" || orStatus === "error") {
+      let extractedError = "Video generation failed upstream.";
+      if (typeof data?.error === "string") extractedError = data.error;
+      else if (data?.error?.message) extractedError = data.error.message;
+
       await prisma.generatedVideo.update({
         where: { id: record.id },
-        data: { status: "failed" },
+        data: { status: "failed", errorMessage: extractedError },
       });
-      return NextResponse.json({ id: record.id, status: "failed" });
+      return NextResponse.json({ id: record.id, status: "failed", errorMessage: extractedError });
     }
 
     if (orStatus !== "completed" || !rawVideoUrl) {

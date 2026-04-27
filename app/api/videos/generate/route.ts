@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       referenceImages,
       referenceVideos,
       referenceAudios,
+      characterImages,
       resolution,
       aspectRatio,
       duration,
@@ -115,8 +116,9 @@ export async function POST(request: NextRequest) {
 
       // REFERENCE MODE
       if (inputMode === "reference") {
+        const combinedImages = [...(referenceImages ?? []), ...(characterImages ?? [])];
         const imgUrls: string[] = await Promise.all(
-          (referenceImages ?? []).map(resolveUrl),
+          combinedImages.map(resolveUrl),
         );
         const vidUrls: string[] = await Promise.all(
           (referenceVideos ?? []).map(resolveUrl),
@@ -161,9 +163,20 @@ export async function POST(request: NextRequest) {
       if (!response.ok) {
         const errText = await response.text();
         console.error("OpenRouter video submission error:", errText);
+        
+        let extractedErrorMessage = "Video generation request failed.";
+        try {
+          const parsedErr = JSON.parse(errText);
+          if (parsedErr?.error?.message) {
+            extractedErrorMessage = parsedErr.error.message;
+          }
+        } catch {
+          extractedErrorMessage = errText;
+        }
+
         await prisma.generatedVideo.update({
           where: { id: record.id },
-          data: { status: "failed" },
+          data: { status: "failed", errorMessage: extractedErrorMessage },
         });
         await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
           videoId: record.id,
@@ -173,6 +186,7 @@ export async function POST(request: NextRequest) {
           id: record.id,
           status: "failed",
           prompt,
+          errorMessage: extractedErrorMessage,
           message: "Video generation request failed.",
         });
       }
@@ -200,21 +214,23 @@ export async function POST(request: NextRequest) {
       } else {
         await prisma.generatedVideo.update({
           where: { id: record.id },
-          data: { status: "failed" },
+          data: { status: "failed", errorMessage: "Failed to get job ID from generation service." },
         });
         
         return NextResponse.json({
           id: record.id,
           status: "failed",
           prompt,
+          errorMessage: "Failed to get job ID from generation service.",
           message: "Failed to get job ID from generation service.",
         });
       }
-    } catch (apiError: unknown) {
+    } catch (apiError: any) {
       console.error("Video API call failed:", apiError);
+      const errMessage = apiError?.message || "Video generation failed.";
       await prisma.generatedVideo.update({
         where: { id: record.id },
-        data: { status: "failed" },
+        data: { status: "failed", errorMessage: errMessage },
       });
       await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
         videoId: record.id,
@@ -224,6 +240,7 @@ export async function POST(request: NextRequest) {
         id: record.id,
         status: "failed",
         prompt,
+        errorMessage: errMessage,
         message: "Video generation failed.",
       });
     }

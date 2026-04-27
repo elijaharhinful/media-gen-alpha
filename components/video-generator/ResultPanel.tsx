@@ -10,6 +10,7 @@ interface VideoResult {
   status?: string;
   prompt?: string;
   message?: string;
+  errorMessage?: string;
   resolution?: string;
   aspectRatio?: string;
   duration?: string | number;
@@ -51,8 +52,8 @@ export function ResultPanel({ loading, result, history, onSelectHistory }: Resul
                   ) : (
                     <>
                       <AlertCircle className="h-8 w-8 text-amber-400 mx-auto mb-3" />
-                      <p className="text-sm font-medium mb-1">Generation Failed</p>
-                      <p className="text-xs text-muted-foreground">{result.message}</p>
+                      <p className="text-sm font-medium mb-1 text-red-400">Generation Failed</p>
+                      <p className="text-xs text-muted-foreground">{result.errorMessage || result.message}</p>
                     </>
                   )}
                 </div>

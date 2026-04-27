@@ -106,6 +106,7 @@ model GeneratedVideo {
     aspectRatio    String   @default("16:9")
     duration       String   @default("5s")
     status         String   @default("pending") // pending, processing, completed, failed
+    errorMessage   String?
     jobId          String?
     userId         String?
     createdAt      DateTime @default(now())
