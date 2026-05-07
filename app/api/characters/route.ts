@@ -24,9 +24,9 @@ export async function GET(request: NextRequest) {
           char.images.map(async (img) => {
             if (img.startsWith("http")) return img;
             return (await getFileUrl(img, true)) ?? img;
-          })
+          }),
         ),
-      }))
+      })),
     );
 
     return NextResponse.json({ characters: charactersWithUrls });
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     console.error("Fetch characters error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -53,10 +53,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    if (status !== "processing" && (!images || !Array.isArray(images) || images.length < 5)) {
+    if (
+      status !== "processing" &&
+      (!images || !Array.isArray(images) || images.length < 2)
+    ) {
       return NextResponse.json(
-        { error: "At least 5 images are required to create a character" },
-        { status: 400 }
+        { error: "At least 2 images are required to create a character" },
+        { status: 400 },
       );
     }
 
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
     console.error("Create character error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -1,4 +1,3 @@
-// Unique colors for @mentions — each index gets a consistent color
 export const MENTION_COLORS = [
   "#a78bfa", // purple  — 1
   "#34d399", // emerald — 2
