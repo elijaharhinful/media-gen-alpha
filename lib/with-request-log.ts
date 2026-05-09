@@ -79,25 +79,25 @@ export function withRequestLog<T = any>(
         shouldLog = false;
       }
 
-      if (!shouldLog) return;
-
-      // Fire-and-forget — DB write must not block or affect the response
-      prisma.requestLog
-        .create({
-          data: {
-            method,
-            path,
-            statusCode,
-            durationMs,
-            userId: userId ?? null,
-            ipAddress,
-            userAgent: userAgent ?? null,
-            error: errorMsg ?? null,
-          },
-        })
-        .catch(() => {
-          // Silent — logging must never crash the app
-        });
+      if (shouldLog) {
+        // Fire-and-forget — DB write must not block or affect the response
+        prisma.requestLog
+          .create({
+            data: {
+              method,
+              path,
+              statusCode,
+              durationMs,
+              userId: userId ?? null,
+              ipAddress,
+              userAgent: userAgent ?? null,
+              error: errorMsg ?? null,
+            },
+          })
+          .catch(() => {
+            // Silent — logging must never crash the app
+          });
+      }
     }
   };
 }
