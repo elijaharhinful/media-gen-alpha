@@ -115,6 +115,7 @@ model GeneratedVideo {
 
     @@index([createdAt(sort: Desc)])
     @@index([userId])
+    @@index([status, jobId, createdAt])
     @@map("generated_videos")
 }
 
@@ -162,4 +163,25 @@ model Character {
 
     @@index([userId])
     @@map("characters")
+}
+
+// ─── Request Logging ─────────────────────────────────────────
+model RequestLog {
+    id         String   @id @default(cuid())
+    method     String                    // GET, POST, PATCH, DELETE
+    path       String                    // e.g. /api/videos/generate
+    statusCode Int                       // HTTP response status
+    durationMs Int                       // time from request start to response
+    userId     String?                  // null for unauthenticated requests
+    ipAddress  String?
+    userAgent  String?
+    error      String?                  // error message on 4xx/5xx, if any
+
+    createdAt  DateTime @default(now())
+
+    @@index([path])
+    @@index([userId])
+    @@index([statusCode])
+    @@index([createdAt(sort: Desc)])
+    @@map("request_logs")
 }

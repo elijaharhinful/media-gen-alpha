@@ -3,8 +3,9 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { withRequestLog } from '@/lib/with-request-log';
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email, password, name } = body ?? {};
@@ -36,7 +37,9 @@ export async function POST(request: NextRequest) {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let unique = false;
       while (!unique) {
-        const code = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+        const code = Array.from({ length: 5 }, () =>
+          chars[Math.floor(Math.random() * chars.length)]
+        ).join('');
         studentId = `STU-${code}`;
         const exists = await prisma.user.findUnique({ where: { studentId } });
         if (!exists) unique = true;
@@ -65,3 +68,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(_POST);

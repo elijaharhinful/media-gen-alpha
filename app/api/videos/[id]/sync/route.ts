@@ -5,13 +5,16 @@ import { prisma } from "@/lib/prisma";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Client, getBucketConfig } from "@/lib/aws-config";
 import { getFileUrl } from "@/lib/s3";
+import { revalidatePath } from "next/cache";
+import { withRequestLog } from "@/lib/with-request-log";
 
 const OPENROUTER_BASE = "https://openrouter.ai";
 
-export async function POST(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export const POST = withRequestLog(
+  async (
+    _req: NextRequest,
+    { params }: { params: { id: string } }
+  ) => {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -143,6 +146,9 @@ export async function POST(
       },
     });
 
+    revalidatePath("/video-generator");
+    revalidatePath("/history");
+
     return NextResponse.json({
       id: record.id,
       status: "completed",
@@ -155,4 +161,4 @@ export async function POST(
       { status: 500 },
     );
   }
-}
+}, { logErrorsOnly: true });

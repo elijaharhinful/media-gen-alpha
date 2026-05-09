@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Client, getBucketConfig } from "@/lib/aws-config";
 import { getFileUrl } from "@/lib/s3";
+import { revalidatePath } from "next/cache";
+import { withRequestLog } from "@/lib/with-request-log";
 
 const OPENROUTER_BASE = "https://openrouter.ai";
 
@@ -15,7 +17,7 @@ function isAuthorized(req: NextRequest) {
   return secret === process.env.CRON_SECRET;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog(async (req: NextRequest) => {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -68,8 +70,14 @@ export async function GET(req: NextRequest) {
   }));
 
   console.log("[recover-stuck] results:", JSON.stringify(summary));
+  
+  if (summary.some(s => s.result && (s.result as any).status === "completed")) {
+    revalidatePath("/video-generator");
+    revalidatePath("/history");
+  }
+
   return NextResponse.json({ recovered: summary.length, summary });
-}
+}, { skipCron: true });
 
 async function recoverVideo(
   record: { id: string; jobId: string | null },

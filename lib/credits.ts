@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ToolType } from '@prisma/client';
+import { cacheGet, cacheSet, cacheDel, TTL } from '@/lib/cache';
 
 // Credit costs per tool
 export const CREDIT_COSTS: Record<ToolType, number> = {
@@ -31,47 +32,81 @@ export async function getTotalCreditsUsed(): Promise<number> {
 }
 
 // Check if user can use a tool (returns { allowed, reason })
+// Results are cached for TTL.CREDIT_CHECK seconds to reduce DB load on
+// rapid successive generation requests.
 export async function canUserUseTool(
   userId: string,
   tool: ToolType
 ): Promise<{ allowed: boolean; reason?: string }> {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return { allowed: false, reason: 'User not found' };
-  if (user.isBlocked) return { allowed: false, reason: 'Account is blocked by admin' };
+  const cacheKey = `credits:${userId}:${tool}`;
+
+  // Check cache first
+  const cached = await cacheGet<{ allowed: boolean; reason?: string }>(cacheKey);
+  if (cached !== null) return cached;
+
+  // Fetch user + credits in parallel (was 2 serial round-trips)
+  const [user, used] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    getUserCreditsUsed(userId),
+  ]);
+
+  if (!user) {
+    const result = { allowed: false, reason: 'User not found' };
+    await cacheSet(cacheKey, result, TTL.CREDIT_CHECK);
+    return result;
+  }
+
+  if (user.isBlocked) {
+    const result = { allowed: false, reason: 'Account is blocked by admin' };
+    await cacheSet(cacheKey, result, TTL.CREDIT_CHECK);
+    return result;
+  }
 
   // Admins have no limits
-  if (user.role === 'ADMIN') return { allowed: true };
+  if (user.role === 'ADMIN') {
+    const result = { allowed: true };
+    await cacheSet(cacheKey, result, TTL.CREDIT_CHECK);
+    return result;
+  }
 
   // Check student credit limit
   if (user.creditLimit !== null && user.creditLimit !== undefined) {
     const totalPool = getTotalPoolCredits();
     const maxCredits = Math.floor((user.creditLimit / 100) * totalPool);
-    const used = await getUserCreditsUsed(userId);
     const cost = CREDIT_COSTS[tool];
 
     if (used + cost > maxCredits) {
-      return {
+      const result = {
         allowed: false,
         reason: `Credit limit reached (${used}/${maxCredits} used). Contact your admin.`,
       };
+      await cacheSet(cacheKey, result, TTL.CREDIT_CHECK);
+      return result;
     }
   }
 
-  return { allowed: true };
+  const result = { allowed: true };
+  await cacheSet(cacheKey, result, TTL.CREDIT_CHECK);
+  return result;
 }
 
-// Record credit usage
+// Record credit usage and invalidate the credit cache for this user+tool
 export async function recordCreditUsage(
   userId: string,
   tool: ToolType,
   metadata?: Record<string, any>
 ) {
-  return prisma.creditUsage.create({
-    data: {
-      userId,
-      tool,
-      cost: CREDIT_COSTS[tool],
-      metadata: metadata ? JSON.stringify(metadata) : null,
-    },
-  });
+  const [record] = await Promise.all([
+    prisma.creditUsage.create({
+      data: {
+        userId,
+        tool,
+        cost: CREDIT_COSTS[tool],
+        metadata: metadata ? JSON.stringify(metadata) : null,
+      },
+    }),
+    // Invalidate credit cache so next check reflects the new usage
+    cacheDel(`credits:${userId}:${tool}`),
+  ]);
+  return record;
 }

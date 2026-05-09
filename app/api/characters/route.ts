@@ -1,16 +1,23 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
 import { getFileUrl } from "@/lib/s3";
+import { cacheGet, cacheSet, cacheDel, TTL } from "@/lib/cache";
+import { withRequestLog } from "@/lib/with-request-log";
 
-export async function GET(request: NextRequest) {
+async function _GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const cacheKey = `characters:${session.user.id}`;
+    const cached = await cacheGet<object>(cacheKey);
+    if (cached) return NextResponse.json(cached);
 
     const characters = await prisma.character.findMany({
       where: { userId: session.user.id },
@@ -29,7 +36,9 @@ export async function GET(request: NextRequest) {
       })),
     );
 
-    return NextResponse.json({ characters: charactersWithUrls });
+    const payload = { characters: charactersWithUrls };
+    await cacheSet(cacheKey, payload, TTL.CHARACTERS);
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Fetch characters error:", error);
     return NextResponse.json(
@@ -39,7 +48,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -73,6 +82,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Invalidate character list cache for this user
+    await cacheDel(`characters:${session.user.id}`);
+
     return NextResponse.json({ character });
   } catch (error) {
     console.error("Create character error:", error);
@@ -82,3 +94,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET  = withRequestLog(_GET);
+export const POST = withRequestLog(_POST);

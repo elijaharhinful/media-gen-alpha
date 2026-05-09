@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { generatePresignedUploadUrl } from '@/lib/s3';
+import { withRequestLog } from '@/lib/with-request-log';
 
-export async function POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -31,3 +32,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to generate upload URL' }, { status: 500 });
   }
 }
+
+export const POST = withRequestLog(_POST);

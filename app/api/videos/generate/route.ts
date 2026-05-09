@@ -6,16 +6,16 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canUserUseTool, recordCreditUsage } from "@/lib/credits";
 import { getFileUrl } from "@/lib/s3";
+import { withRequestLog } from "@/lib/with-request-log";
 
 const OPENROUTER_BASE = "https://openrouter.ai";
-
 
 async function resolveUrl(path: string): Promise<string> {
   if (path.startsWith("http")) return path;
   return (await getFileUrl(path, true)) ?? path;
 }
 
-export async function POST(request: NextRequest) {
+export async function _POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -252,3 +252,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(_POST);
+

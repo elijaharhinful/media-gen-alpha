@@ -8,8 +8,9 @@ import { canUserUseTool, recordCreditUsage } from "@/lib/credits";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Client, getBucketConfig } from "@/lib/aws-config";
 import { getFileUrl } from "@/lib/s3";
+import { withRequestLog } from "@/lib/with-request-log";
 
-export async function POST(request: NextRequest) {
+export async function _POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -196,3 +197,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(_POST);
+
