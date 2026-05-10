@@ -50,14 +50,22 @@ interface MentionBadgeProps {
   index: number; // 1-based
   children: React.ReactNode;
   onRemove: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }
 
-export function MentionBadge({ index, children, onRemove }: MentionBadgeProps) {
+export function MentionBadge({ index, children, onRemove, draggable, onDragStart, onDragOver, onDrop }: MentionBadgeProps) {
   const color = getMentionColor(index);
   return (
     <div
-      className="relative rounded-lg overflow-hidden flex-shrink-0"
+      className={`relative rounded-lg overflow-hidden flex-shrink-0 ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       style={{ border: `2px solid ${color}` }}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       {children}
       {/* Number badge */}
@@ -84,13 +92,24 @@ interface ImageRefThumbProps {
   preview: string;
   index: number;
   onRemove: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }
 
-export function ImageRefThumb({ preview, index, onRemove }: ImageRefThumbProps) {
+export function ImageRefThumb({ preview, index, onRemove, draggable, onDragStart, onDragOver, onDrop }: ImageRefThumbProps) {
   return (
-    <MentionBadge index={index} onRemove={onRemove}>
-      <div className="w-14 h-14">
-        <Image src={preview} alt={`ref ${index}`} fill className="object-cover" />
+    <MentionBadge 
+      index={index} 
+      onRemove={onRemove}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <div className="w-14 h-14 pointer-events-none">
+        <Image src={preview} alt={`ref ${index}`} fill className="object-cover pointer-events-none" />
       </div>
     </MentionBadge>
   );
@@ -103,17 +122,25 @@ interface MediaChipProps {
   index: number;
   icon: React.ReactNode;
   onRemove: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
 }
 
-export function MediaChip({ name, index, icon, onRemove }: MediaChipProps) {
+export function MediaChip({ name, index, icon, onRemove, draggable, onDragStart, onDragOver, onDrop }: MediaChipProps) {
   const color = getMentionColor(index);
   return (
     <div
-      className="flex items-center gap-1.5 rounded-lg px-2 py-1 border"
+      className={`flex items-center gap-1.5 rounded-lg px-2 py-1 border ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       style={{
         background: `${color}18`,
         borderColor: `${color}44`,
       }}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       {/* Colored number badge */}
       <span

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ImageIcon, Video, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -29,6 +29,37 @@ export function ReferenceInput({
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
   const audRef = useRef<HTMLInputElement>(null);
+
+  const [draggedImgIdx, setDraggedImgIdx] = useState<number | null>(null);
+  const [draggedVidIdx, setDraggedVidIdx] = useState<number | null>(null);
+  const [draggedAudIdx, setDraggedAudIdx] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, idx: number, setIdx: React.Dispatch<React.SetStateAction<number | null>>) => {
+    setIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (
+    e: React.DragEvent,
+    targetIdx: number,
+    draggedIdx: number | null,
+    items: MediaRef[],
+    onChange: (items: MediaRef[]) => void,
+    setDraggedIdx: React.Dispatch<React.SetStateAction<number | null>>
+  ) => {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === targetIdx) return;
+    const newItems = [...items];
+    const [removed] = newItems.splice(draggedIdx, 1);
+    newItems.splice(targetIdx, 0, removed);
+    onChange(newItems);
+    setDraggedIdx(null);
+  };
 
   const addImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -79,7 +110,16 @@ export function ReferenceInput({
         {refImages.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {refImages.map((img, i) => (
-              <ImageRefThumb key={i} preview={img.preview!} index={i + 1} onRemove={() => removeImage(i)} />
+              <ImageRefThumb 
+                key={img.id} 
+                preview={img.preview!} 
+                index={i + 1} 
+                onRemove={() => removeImage(i)} 
+                draggable
+                onDragStart={(e) => handleDragStart(e, i, setDraggedImgIdx)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, i, draggedImgIdx, refImages, onImagesChange, setDraggedImgIdx)}
+              />
             ))}
             {refImages.length < 9 && <AddThumb onClick={() => imgRef.current?.click()} />}
           </div>
@@ -100,8 +140,17 @@ export function ReferenceInput({
           {refVideos.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {refVideos.map((v, i) => (
-                <MediaChip key={i} name={v.name} index={i + 1} icon={<Video className="h-3 w-3" />}
-                  onRemove={() => onVideosChange(refVideos.filter((_, idx) => idx !== i))} />
+                <MediaChip 
+                  key={v.id} 
+                  name={v.name} 
+                  index={i + 1} 
+                  icon={<Video className="h-3 w-3" />}
+                  onRemove={() => onVideosChange(refVideos.filter((_, idx) => idx !== i))}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, i, setDraggedVidIdx)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, i, draggedVidIdx, refVideos, onVideosChange, setDraggedVidIdx)}
+                />
               ))}
             </div>
           )}
@@ -118,8 +167,17 @@ export function ReferenceInput({
           {refAudios.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {refAudios.map((a, i) => (
-                <MediaChip key={i} name={a.name} index={i + 1} icon={<Volume2 className="h-3 w-3" />}
-                  onRemove={() => onAudiosChange(refAudios.filter((_, idx) => idx !== i))} />
+                <MediaChip 
+                  key={a.id} 
+                  name={a.name} 
+                  index={i + 1} 
+                  icon={<Volume2 className="h-3 w-3" />}
+                  onRemove={() => onAudiosChange(refAudios.filter((_, idx) => idx !== i))}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, i, setDraggedAudIdx)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, i, draggedAudIdx, refAudios, onAudiosChange, setDraggedAudIdx)}
+                />
               ))}
             </div>
           )}

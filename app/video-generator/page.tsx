@@ -104,8 +104,8 @@ function rewritePromptMediaTags(
   oldRefs.forEach((ref) => {
     const tempTag = `__TEMP_${ref.id}__`;
     newPrompt = newPrompt.replace(
-      new RegExp(tempTag, "g"),
-      `@deleted_${prefix}`,
+      new RegExp(` ?${tempTag}`, "g"),
+      "",
     );
   });
 

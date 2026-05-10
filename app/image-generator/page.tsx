@@ -49,6 +49,7 @@ interface GeneratedImageResult {
 }
 
 interface RefImage {
+  id: string;
   file: File;
   preview: string;
 }
@@ -62,6 +63,7 @@ export default function ImageGeneratorPage() {
   const [style, setStyle] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [refImages, setRefImages] = useState<RefImage[]>([]);
+  const [draggedImgIdx, setDraggedImgIdx] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GeneratedImageResult | null>(null);
   const [imgError, setImgError] = useState(false);
@@ -84,11 +86,34 @@ export default function ImageGeneratorPage() {
       return;
     }
     const newImages = files.map(file => ({
+      id: crypto.randomUUID(),
       file,
       preview: URL.createObjectURL(file),
     }));
     setRefImages(prev => [...prev, ...newImages]);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
+    setDraggedImgIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    if (draggedImgIdx === null || draggedImgIdx === idx) return;
+    setRefImages(prev => {
+      const newRefs = [...prev];
+      const [removed] = newRefs.splice(draggedImgIdx, 1);
+      newRefs.splice(idx, 0, removed);
+      return newRefs;
+    });
+    setDraggedImgIdx(null);
   };
 
   const removeRefImage = (index: number) => {
@@ -218,8 +243,15 @@ export default function ImageGeneratorPage() {
                   </label>
                   <div className="flex flex-wrap gap-3 items-start">
                     {refImages.map((img, i) => (
-                      <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 bg-muted">
-                        <Image src={img.preview} alt={`Reference ${i + 1}`} fill className="object-cover" />
+                      <div 
+                        key={img.id} 
+                        className="relative w-20 h-20 rounded-lg overflow-hidden border border-border/50 bg-muted cursor-grab active:cursor-grabbing"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, i)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, i)}
+                      >
+                        <Image src={img.preview} alt={`Reference ${i + 1}`} fill className="object-cover pointer-events-none" />
                         <button
                           onClick={() => removeRefImage(i)}
                           className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center text-white hover:bg-red-500 transition-colors"
