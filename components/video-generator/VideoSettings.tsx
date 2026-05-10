@@ -50,7 +50,7 @@ export const ASPECT_RATIOS = [
   { value: '9:21', label: '9:21' },
 ];
 
-export const DURATIONS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+export const DURATIONS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 // ── Composed settings row ─────────────────────────────────────────────────────
 

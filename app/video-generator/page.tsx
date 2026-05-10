@@ -25,7 +25,6 @@ import {
   MediaRef,
 } from "@/components/video-generator/ReferenceInput";
 import { VideoSettings } from "@/components/video-generator/VideoSettings";
-import { ResultPanel } from "@/components/video-generator/ResultPanel";
 import { CharacterModal } from "@/components/video-generator/CharacterModal";
 import type { FrameImage } from "@/components/video-generator/FrameSlot";
 
@@ -120,7 +119,7 @@ export default function VideoGeneratorPage() {
   const [inputMode, setInputMode] = useState<InputMode>("keyframe");
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [duration, setDuration] = useState(5);
+  const [duration, setDuration] = useState(3);
 
   const [startFrame, setStartFrame] = useState<FrameImage | null>(null);
   const [endFrame, setEndFrame] = useState<FrameImage | null>(null);
@@ -298,7 +297,7 @@ export default function VideoGeneratorPage() {
       mutateHistory();
       if (data.status === "completed") toast.success("Video generated!");
       else if (data.status === "processing")
-        toast.info("Video is being processed...");
+        toast.info("Video generation is in progress. You can monitor it in the Tasks menu.");
       else toast.info(data.message || "Request saved");
     } catch {
       toast.error("Something went wrong");
@@ -329,8 +328,8 @@ export default function VideoGeneratorPage() {
       </section>
 
       <section className="pb-16 px-4">
-        <div className="mx-auto max-w-[960px]">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-6">
+        <div className="mx-auto max-w-[800px]">
+          <div className="flex flex-col gap-6">
             {/* Input panel */}
             <div className="space-y-4">
               <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm overflow-hidden">
@@ -416,14 +415,6 @@ export default function VideoGeneratorPage() {
                 </div>
               </div>
             </div>
-
-            {/* Result panel */}
-            <ResultPanel
-              loading={loading}
-              result={result}
-              history={history}
-              onSelectHistory={setResult}
-            />
           </div>
         </div>
       </section>

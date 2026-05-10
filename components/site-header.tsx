@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import useSWR from "swr";
 import {
   Sparkles,
   ImageIcon,
@@ -17,10 +19,177 @@ import {
   ListTodo,
   ChevronDown,
   User,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import { useState, useRef, useEffect } from "react";
+
+function TasksDropdown({
+  activeTaskCount,
+  pathname,
+}: {
+  activeTaskCount: number;
+  pathname: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const { data: tasksData, isLoading } = useSWR(
+    open ? "header_tasks" : null,
+    async () => {
+      const [imgRes, vidRes] = await Promise.all([
+        fetch("/api/images/history?limit=10"),
+        fetch("/api/videos/history?limit=10"),
+      ]);
+      const imgData = await imgRes.json();
+      const vidData = await vidRes.json();
+
+      const imageTasks = (imgData.images || []).map((i: any) => ({
+        ...i,
+        type: "image",
+      }));
+      const videoTasks = (vidData.videos || []).map((v: any) => ({
+        ...v,
+        type: "video",
+      }));
+
+      const all = [...imageTasks, ...videoTasks].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+      return all;
+    },
+    { refreshInterval: 5000 },
+  );
+
+  const tasks = tasksData || [];
+  const isActive = pathname === "/tasks";
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          isActive || open
+            ? "text-amber-400 bg-white/5"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <ListTodo className="h-4 w-4" />
+        <span>Tasks</span>
+        {activeTaskCount > 0 && (
+          <span className="ml-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-black">
+            {activeTaskCount}
+          </span>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-border/60 bg-card/95 backdrop-blur-xl shadow-2xl overflow-hidden z-50 flex flex-col"
+          >
+            <div className="flex items-center justify-between px-4 py-2 text-[10px] font-bold text-muted-foreground tracking-wider border-b border-border/40">
+              <span>COMPLETED</span>
+              <button className="text-muted-foreground hover:text-foreground transition-colors">
+                × Clear completed
+              </button>
+            </div>
+
+            <div className="max-h-[300px] overflow-y-auto p-2 space-y-1">
+              {isLoading ? (
+                <div className="py-4 flex justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : tasks.length === 0 ? (
+                <div className="py-4 text-center text-xs text-muted-foreground">
+                  No tasks found.
+                </div>
+              ) : (
+                tasks.map((task: any) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 group relative"
+                  >
+                    <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0 relative">
+                      {task.imageUrl || task.startFrameUrl || task.videoUrl ? (
+                        <Image
+                          src={
+                            task.imageUrl || task.startFrameUrl || task.videoUrl
+                          }
+                          alt="thumbnail"
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-white/5">
+                          {task.type === "video" ? (
+                            <Film className="h-4 w-4 text-purple-400/50" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4 text-lime-400/50" />
+                          )}
+                        </div>
+                      )}
+                      {task.status === "processing" && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">
+                        {task.type === "video" ? "Video" : "Image"}
+                        {task.status === "processing" && (
+                          <span className="ml-1 text-amber-400">
+                            (Processing)
+                          </span>
+                        )}
+                        {task.status === "failed" && (
+                          <span className="ml-1 text-red-400">(Failed)</span>
+                        )}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        Seedance 2.0 — ArtCraft
+                      </p>
+                    </div>
+                    <button className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-muted-foreground transition-all">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-2 border-t border-border/40">
+              <Link
+                href="/tasks"
+                onClick={() => setOpen(false)}
+                className="block w-full py-2 text-center text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                Show all
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 const toolNavItems = [
   {
@@ -218,6 +387,16 @@ export function SiteHeader() {
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-1">
           {toolNavItems.map((item) => {
+            if (item.href === "/tasks") {
+              return (
+                <TasksDropdown
+                  key={item.href}
+                  activeTaskCount={activeTaskCount}
+                  pathname={pathname}
+                />
+              );
+            }
+
             const isActive =
               pathname === item.href || pathname?.startsWith(item.href + "/");
             const Icon = item.icon;
@@ -234,11 +413,6 @@ export function SiteHeader() {
                 >
                   <Icon className="h-4 w-4" />
                   <span>{item.label}</span>
-                  {item.href === "/tasks" && activeTaskCount > 0 && (
-                    <span className="ml-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-black">
-                      {activeTaskCount}
-                    </span>
-                  )}
                   {isActive && (
                     <motion.div
                       layoutId="active-nav"
