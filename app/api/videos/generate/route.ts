@@ -15,7 +15,7 @@ async function resolveUrl(path: string): Promise<string> {
   return (await getFileUrl(path, true)) ?? path;
 }
 
-export async function _POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

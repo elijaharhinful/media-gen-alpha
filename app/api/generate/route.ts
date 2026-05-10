@@ -8,7 +8,7 @@ import { MULTIPLIER_SYSTEM_PROMPT } from "@/lib/multiplier-system-prompt";
 import { canUserUseTool, recordCreditUsage } from "@/lib/credits";
 import { withRequestLog } from "@/lib/with-request-log";
 
-export async function _POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

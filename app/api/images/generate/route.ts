@@ -10,7 +10,7 @@ import { createS3Client, getBucketConfig } from "@/lib/aws-config";
 import { getFileUrl } from "@/lib/s3";
 import { withRequestLog } from "@/lib/with-request-log";
 
-export async function _POST(request: NextRequest) {
+async function _POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
