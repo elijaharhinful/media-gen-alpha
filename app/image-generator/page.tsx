@@ -65,12 +65,57 @@ export default function ImageGeneratorPage() {
   const [refImages, setRefImages] = useState<RefImage[]>([]);
   const [draggedImgIdx, setDraggedImgIdx] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [result, setResult] = useState<GeneratedImageResult | null>(null);
   const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') router.replace('/login');
   }, [status, router]);
+
+  useEffect(() => {
+    const initData = sessionStorage.getItem('img-gen-init');
+    if (initData) {
+      setIsRestoring(true);
+      try {
+        const parsed = JSON.parse(initData);
+        if (parsed.prompt) setPrompt(parsed.prompt);
+        if (parsed.style) setStyle(parsed.style);
+        if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio);
+        
+        if (parsed.referenceImages && parsed.referenceImages.length > 0) {
+          const loadRefs = async () => {
+            const loaded: RefImage[] = [];
+            for (const url of parsed.referenceImages) {
+              try {
+                const fullUrl = url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_R2_URL || ''}/${url}`;
+                const res = await fetch(fullUrl);
+                const blob = await res.blob();
+                const filename = url.split('/').pop() || 'reference.jpg';
+                const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+                loaded.push({
+                  id: crypto.randomUUID(),
+                  file,
+                  preview: URL.createObjectURL(file),
+                });
+              } catch(e) {
+                console.error("Failed to load reference image", e);
+              }
+            }
+            setRefImages(prev => [...prev, ...loaded]);
+            setIsRestoring(false);
+          };
+          loadRefs();
+        } else {
+          setIsRestoring(false);
+        }
+      } catch (e) {
+        console.error("Failed to parse init data", e);
+        setIsRestoring(false);
+      }
+      sessionStorage.removeItem('img-gen-init');
+    }
+  }, []);
 
   const { data: historyData, mutate: mutateHistory } = useSWR(
     status === 'authenticated' ? '/api/images/history?limit=3' : null,
@@ -223,7 +268,16 @@ export default function ImageGeneratorPage() {
 
       <section className="pb-16 px-4">
         <div className="mx-auto max-w-[1000px]">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-6 relative">
+            {isRestoring && (
+              <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+                <div className="flex flex-col items-center gap-3 bg-card p-6 rounded-xl shadow-lg border border-border/50 text-center">
+                  <Loader2 className="h-8 w-8 text-lime-400 animate-spin mx-auto" />
+                  <p className="text-sm font-medium">Restoring generator state...</p>
+                  <p className="text-xs text-muted-foreground">Downloading references</p>
+                </div>
+              </div>
+            )}
             {/* Input Panel */}
             <div className="space-y-4">
               <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-6">

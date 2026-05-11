@@ -33,12 +33,15 @@ interface Task {
   style?: string;
   imageUrl?: string;
   videoUrl?: string;
+  referenceImages?: string[];
+  referenceVideos?: string[];
+  referenceAudios?: string[];
 }
 
 type TaskTab = "active" | "all";
 
 // Task Card ─────────────────────────────────────────────────
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({ task, onOpenGenerator }: { task: Task, onOpenGenerator: (task: Task) => void }) {
   const isActive = task.status === "processing" || task.status === "pending";
 
   const statusConfig: Record<
@@ -182,16 +185,14 @@ function TaskCard({ task }: { task: Task }) {
       )}
 
       {/* View result link */}
-      {task.status === "completed" && (
+      {task.status === "completed" && task.type !== "character" && (
         <div className="mt-3 flex justify-end">
-          <Link
-            href={
-              task.type === "image" ? "/image-generator" : "/video-generator"
-            }
+          <button
+            onClick={() => onOpenGenerator(task)}
             className={`text-xs font-medium ${typeColor} hover:opacity-80 transition-opacity`}
           >
             Open in generator →
-          </Link>
+          </button>
         </div>
       )}
     </motion.div>
@@ -252,6 +253,29 @@ export default function TasksPage() {
   const activeTasks = tasks.filter(
     (t) => t.status === "processing" || t.status === "pending",
   );
+
+  const handleOpenGenerator = (task: Task) => {
+    if (task.type === "image") {
+      sessionStorage.setItem('img-gen-init', JSON.stringify({
+        prompt: task.prompt,
+        style: task.style,
+        aspectRatio: task.aspectRatio,
+        referenceImages: task.referenceImages || [],
+      }));
+      router.push('/image-generator');
+    } else if (task.type === "video") {
+      sessionStorage.setItem('vid-gen-init', JSON.stringify({
+        prompt: task.prompt,
+        resolution: task.resolution,
+        aspectRatio: task.aspectRatio,
+        duration: task.duration,
+        referenceImages: task.referenceImages || [],
+        referenceVideos: task.referenceVideos || [],
+        referenceAudios: task.referenceAudios || [],
+      }));
+      router.push('/video-generator');
+    }
+  };
 
   // Poll OpenRouter for active *video* tasks specifically
   useEffect(() => {
@@ -400,7 +424,7 @@ export default function TasksPage() {
             <AnimatePresence mode="popLayout">
               <div className="flex flex-col gap-3">
                 {displayedTasks.map((task) => (
-                  <TaskCard key={`${task.type}-${task.id}`} task={task} />
+                  <TaskCard key={`${task.type}-${task.id}`} task={task} onOpenGenerator={handleOpenGenerator} />
                 ))}
               </div>
             </AnimatePresence>

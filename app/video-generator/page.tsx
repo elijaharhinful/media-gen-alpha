@@ -129,6 +129,7 @@ export default function VideoGeneratorPage() {
   const [refAudios, setRefAudios] = useState<MediaRef[]>([]);
 
   const [loading, setLoading] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [result, setResult] = useState<any>(null);
 
   const [charModalOpen, setCharModalOpen] = useState(false);
@@ -136,6 +137,75 @@ export default function VideoGeneratorPage() {
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
+
+  useEffect(() => {
+    const initData = sessionStorage.getItem('vid-gen-init');
+    if (initData) {
+      setIsRestoring(true);
+      try {
+        const parsed = JSON.parse(initData);
+        if (parsed.prompt) setPrompt(parsed.prompt);
+        if (parsed.resolution) setResolution(parsed.resolution);
+        if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio);
+        
+        let dur = 3;
+        if (typeof parsed.duration === 'string') {
+          dur = parseInt(parsed.duration.replace('s', ''), 10) || 3;
+        } else if (typeof parsed.duration === 'number') {
+          dur = parsed.duration;
+        }
+        setDuration(dur);
+
+        const hasRefs = (parsed.referenceImages?.length > 0) || (parsed.referenceVideos?.length > 0) || (parsed.referenceAudios?.length > 0);
+        if (hasRefs) {
+          setInputMode("reference");
+        }
+
+        const loadMedia = async (urls: string[], type: 'image' | 'video' | 'audio') => {
+          const loaded: MediaRef[] = [];
+          for (const url of urls) {
+            try {
+              const fullUrl = url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_R2_URL || ''}/${url}`;
+              const res = await fetch(fullUrl);
+              const blob = await res.blob();
+              const filename = url.split('/').pop() || `reference.${type === 'image' ? 'jpg' : type === 'video' ? 'mp4' : 'mp3'}`;
+              const file = new File([blob], filename, { type: blob.type || (type === 'image' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : 'audio/mpeg') });
+              loaded.push({
+                id: crypto.randomUUID(),
+                file,
+                name: filename,
+                preview: type === 'image' ? URL.createObjectURL(file) : undefined,
+              });
+            } catch (e) {
+              console.error(`Failed to load reference ${type}`, e);
+            }
+          }
+          return loaded;
+        };
+
+        const initRefs = async () => {
+          if (parsed.referenceImages && parsed.referenceImages.length > 0) {
+            const imgs = await loadMedia(parsed.referenceImages, 'image');
+            setRefImages(prev => [...prev, ...imgs]);
+          }
+          if (parsed.referenceVideos && parsed.referenceVideos.length > 0) {
+            const vids = await loadMedia(parsed.referenceVideos, 'video');
+            setRefVideos(prev => [...prev, ...vids]);
+          }
+          if (parsed.referenceAudios && parsed.referenceAudios.length > 0) {
+            const auds = await loadMedia(parsed.referenceAudios, 'audio');
+            setRefAudios(prev => [...prev, ...auds]);
+          }
+          setIsRestoring(false);
+        };
+        initRefs();
+      } catch (e) {
+        console.error("Failed to parse init data", e);
+        setIsRestoring(false);
+      }
+      sessionStorage.removeItem('vid-gen-init');
+    }
+  }, []);
 
   const { data: historyData, mutate: mutateHistory } = useSWR(
     status === "authenticated" ? "/api/videos/history?limit=5" : null,
@@ -329,7 +399,16 @@ export default function VideoGeneratorPage() {
 
       <section className="pb-16 px-4">
         <div className="mx-auto max-w-[800px]">
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 relative">
+            {isRestoring && (
+              <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+                <div className="flex flex-col items-center gap-3 bg-card p-6 rounded-xl shadow-lg border border-border/50 text-center">
+                  <Loader2 className="h-8 w-8 text-purple-400 animate-spin mx-auto" />
+                  <p className="text-sm font-medium">Restoring generator state...</p>
+                  <p className="text-xs text-muted-foreground">Downloading references</p>
+                </div>
+              </div>
+            )}
             {/* Input panel */}
             <div className="space-y-4">
               <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm overflow-hidden">

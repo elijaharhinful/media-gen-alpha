@@ -32,6 +32,7 @@ interface ImageItem {
   id: string;
   prompt: string;
   imageUrl?: string;
+  referenceImages?: string[];
   style?: string;
   aspectRatio?: string;
   status: string;
@@ -43,6 +44,9 @@ interface VideoItem {
   id: string;
   prompt: string;
   videoUrl?: string;
+  referenceImages?: string[];
+  referenceVideos?: string[];
+  referenceAudios?: string[];
   resolution?: string;
   aspectRatio?: string;
   duration?: string;
@@ -98,9 +102,11 @@ function StatusBadge({ status }: { status: string }) {
 function ImageLightbox({
   item,
   onClose,
+  onOpenGenerator,
 }: {
   item: ImageItem;
   onClose: () => void;
+  onOpenGenerator: (item: ImageItem) => void;
 }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -168,6 +174,12 @@ function ImageLightbox({
                 <Download className="h-3.5 w-3.5" /> Download
               </a>
             )}
+            <button
+              onClick={() => onOpenGenerator(item)}
+              className="flex items-center gap-1.5 text-xs text-black bg-lime-400 hover:bg-lime-500 px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Open in Generator
+            </button>
           </div>
         </div>
       </motion.div>
@@ -179,9 +191,11 @@ function ImageLightbox({
 function VideoModal({
   item,
   onClose,
+  onOpenGenerator,
 }: {
   item: VideoItem;
   onClose: () => void;
+  onOpenGenerator: (item: VideoItem) => void;
 }) {
   const vidRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
@@ -259,6 +273,21 @@ function VideoModal({
                 {item.duration}
               </span>
             )}
+            {item.videoUrl && (
+              <a
+                href={item.videoUrl}
+                download
+                className="flex items-center gap-1.5 text-xs text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" /> Download
+              </a>
+            )}
+            <button
+              onClick={() => onOpenGenerator(item)}
+              className="flex items-center gap-1.5 text-xs text-white bg-purple-500 hover:bg-purple-600 px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Open in Generator
+            </button>
           </div>
         </div>
       </motion.div>
@@ -271,10 +300,12 @@ function ImageCard({
   item,
   view,
   onOpen,
+  onOpenGenerator,
 }: {
   item: ImageItem;
   view: "grid" | "list";
   onOpen: () => void;
+  onOpenGenerator: (item: ImageItem) => void;
 }) {
   if (view === "list") {
     return (
@@ -319,15 +350,29 @@ function ImageCard({
             </span>
           </div>
         </div>
-        {item.imageUrl && (
-          <a
-            href={item.imageUrl}
-            download
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-lg bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+          {item.imageUrl && (
+            <a
+              href={item.imageUrl}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+              title="Download Image"
+            >
+              <Download className="h-4 w-4" />
+            </a>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenGenerator(item);
+            }}
+            className="p-2 rounded-lg bg-lime-400/10 hover:bg-lime-400/20 text-lime-400"
+            title="Open in Generator"
           >
-            <Download className="h-3.5 w-3.5" />
-          </a>
-        )}
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+        </div>
       </motion.div>
     );
   }
@@ -356,17 +401,30 @@ function ImageCard({
         )}
         {/* Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        {/* Download button */}
-        {item.imageUrl && (
-          <a
-            href={item.imageUrl}
-            download
-            className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
-            onClick={(e) => e.stopPropagation()}
+        {/* Buttons */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenGenerator(item);
+            }}
+            className="p-1.5 rounded-lg bg-lime-400/80 backdrop-blur-sm text-black hover:bg-lime-400"
+            title="Open in Generator"
           >
-            <Download className="h-3 w-3" />
-          </a>
-        )}
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+          </button>
+          {item.imageUrl && (
+            <a
+              href={item.imageUrl}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
+              title="Download Image"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
         {/* Expand icon */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="p-2.5 rounded-full bg-black/50 backdrop-blur-sm ring-1 ring-white/20">
@@ -402,10 +460,12 @@ function VideoCard({
   item,
   view,
   onOpen,
+  onOpenGenerator,
 }: {
   item: VideoItem;
   view: "grid" | "list";
   onOpen: () => void;
+  onOpenGenerator: (item: VideoItem) => void;
 }) {
   if (view === "list") {
     return (
@@ -456,6 +516,29 @@ function VideoCard({
             </span>
           </div>
         </div>
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+          {item.videoUrl && (
+            <a
+              href={item.videoUrl}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+              title="Download Video"
+            >
+              <Download className="h-4 w-4" />
+            </a>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenGenerator(item);
+            }}
+            className="p-2 rounded-lg bg-purple-400/10 hover:bg-purple-400/20 text-purple-400"
+            title="Open in Generator"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+        </div>
       </motion.div>
     );
   }
@@ -478,6 +561,33 @@ function VideoCard({
         ) : (
           <Film className="h-8 w-8 text-muted-foreground/30" />
         )}
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        
+        {/* Buttons */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenGenerator(item);
+            }}
+            className="p-1.5 rounded-lg bg-purple-500/80 backdrop-blur-sm text-white hover:bg-purple-500"
+            title="Open in Generator"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+          </button>
+          {item.videoUrl && (
+            <a
+              href={item.videoUrl}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
+              title="Download Video"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
         {item.status === "processing" && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
@@ -590,6 +700,29 @@ function LibraryInner() {
     );
   }
 
+    const handleOpenImageGenerator = (item: ImageItem) => {
+      sessionStorage.setItem('img-gen-init', JSON.stringify({
+        prompt: item.prompt,
+        style: item.style,
+        aspectRatio: item.aspectRatio,
+        referenceImages: item.referenceImages || [],
+      }));
+      router.push('/image-generator');
+    };
+
+    const handleOpenVideoGenerator = (item: VideoItem) => {
+      sessionStorage.setItem('vid-gen-init', JSON.stringify({
+        prompt: item.prompt,
+        resolution: item.resolution,
+        aspectRatio: item.aspectRatio,
+        duration: item.duration,
+        referenceImages: item.referenceImages || [],
+        referenceVideos: item.referenceVideos || [],
+        referenceAudios: item.referenceAudios || [],
+      }));
+      router.push('/video-generator');
+    };
+
   return (
     <>
       <AnimatePresence>
@@ -597,12 +730,14 @@ function LibraryInner() {
           <ImageLightbox
             item={selectedItem as ImageItem}
             onClose={() => setSelectedItem(null)}
+            onOpenGenerator={handleOpenImageGenerator}
           />
         )}
         {selectedItem?.type === "video" && (
           <VideoModal
             item={selectedItem as VideoItem}
             onClose={() => setSelectedItem(null)}
+            onOpenGenerator={handleOpenVideoGenerator}
           />
         )}
       </AnimatePresence>
@@ -765,6 +900,7 @@ function LibraryInner() {
                           item={item as ImageItem}
                           view={view}
                           onOpen={() => setSelectedItem(item)}
+                          onOpenGenerator={handleOpenImageGenerator}
                         />
                       ) : (
                         <VideoCard
@@ -772,6 +908,7 @@ function LibraryInner() {
                           item={item as VideoItem}
                           view={view}
                           onOpen={() => setSelectedItem(item)}
+                          onOpenGenerator={handleOpenVideoGenerator}
                         />
                       ),
                     )}

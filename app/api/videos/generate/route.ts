@@ -74,6 +74,8 @@ async function _POST(request: NextRequest) {
       data: {
         prompt,
         referenceImages: referenceImages || [],
+        referenceVideos: referenceVideos || [],
+        referenceAudios: referenceAudios || [],
         resolution: resolution || "720p",
         aspectRatio: aspectRatio || "16:9",
         duration: `${durationSeconds}s`,
