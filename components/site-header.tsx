@@ -18,12 +18,102 @@ import {
   BookImage,
   ListTodo,
   ChevronDown,
-  User,
   Loader2,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  ArrowUpRight,
+  Play,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+
+const DISMISSED_KEY = "tasks_dismissed_ids";
+
+function getDismissed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch { return new Set(); }
+}
+
+function saveDismissed(ids: Set<string>) {
+  try { localStorage.setItem(DISMISSED_KEY, JSON.stringify([...ids])); } catch {}
+}
+
+function TaskDetailModal({ task, onClose, onOpenGenerator }: {
+  task: any;
+  onClose: () => void;
+  onOpenGenerator: (task: any) => void;
+}) {
+  const isActive = task.status === "processing" || task.status === "pending";
+  const isFailed = task.status === "failed";
+  const isCompleted = task.status === "completed";
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.93, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.93, y: 12 }}
+        transition={{ duration: 0.18 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md rounded-2xl border border-border/60 bg-card/98 backdrop-blur-xl shadow-2xl overflow-hidden"
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 z-10 p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors">
+          <X className="h-4 w-4" />
+        </button>
+
+        {/* Media area */}
+        <div className="relative w-full bg-black/40" style={{ aspectRatio: "16/9" }}>
+          {isCompleted && task.videoUrl ? (
+            <video src={task.videoUrl} controls className="w-full h-full object-contain" />
+          ) : isCompleted && task.imageUrl ? (
+            <Image src={task.imageUrl} alt="result" fill className="object-contain" />
+          ) : isActive ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="h-8 w-8 text-amber-400 animate-spin" />
+              <p className="text-sm text-muted-foreground">Generating{task.type === "video" ? " video" : " image"}…</p>
+              <div className="w-40 h-1 rounded-full bg-white/10 overflow-hidden">
+                <motion.div className="h-full bg-amber-400 rounded-full" animate={{ x: ["-100%", "100%"] }} transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }} />
+              </div>
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <XCircle className="h-8 w-8 text-red-400" />
+              <p className="text-sm text-red-400">Generation failed</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            {task.type === "video" ? <Film className="h-4 w-4 text-purple-400" /> : <ImageIcon className="h-4 w-4 text-lime-400" />}
+            <span className={`text-xs font-semibold uppercase tracking-wide ${task.type === "video" ? "text-purple-400" : "text-lime-400"}`}>
+              {task.type === "video" ? "Video Generation" : "Image Generation"}
+            </span>
+            {isCompleted && <span className="ml-auto flex items-center gap-1 text-[10px] text-green-400"><CheckCircle2 className="h-3 w-3" /> Completed</span>}
+            {isActive && <span className="ml-auto flex items-center gap-1 text-[10px] text-amber-400"><Clock className="h-3 w-3" /> Processing</span>}
+            {isFailed && <span className="ml-auto flex items-center gap-1 text-[10px] text-red-400"><XCircle className="h-3 w-3" /> Failed</span>}
+          </div>
+          {task.prompt && <p className="text-sm text-foreground line-clamp-3">{task.prompt}</p>}
+          {isCompleted && (
+            <button
+              onClick={() => { onClose(); onOpenGenerator(task); }}
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                task.type === "video" ? "bg-purple-400/10 hover:bg-purple-400/20 text-purple-400 border border-purple-400/20" : "bg-lime-400/10 hover:bg-lime-400/20 text-lime-400 border border-lime-400/20"
+              }`}
+            >
+              <ArrowUpRight className="h-3.5 w-3.5" /> Open in Generator
+            </button>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
 
 function TasksDropdown({
   activeTaskCount,
@@ -32,8 +122,15 @@ function TasksDropdown({
   activeTaskCount: number;
   pathname: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [selectedTask, setSelectedTask] = useState<any>(null);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDismissed(getDismissed());
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -54,36 +151,55 @@ function TasksDropdown({
       ]);
       const imgData = await imgRes.json();
       const vidData = await vidRes.json();
-
-      const imageTasks = (imgData.images || []).map((i: any) => ({
-        ...i,
-        type: "image",
-      }));
-      const videoTasks = (vidData.videos || []).map((v: any) => ({
-        ...v,
-        type: "video",
-      }));
-
-      const all = [...imageTasks, ...videoTasks].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      const imageTasks = (imgData.images || []).map((i: any) => ({ ...i, type: "image" }));
+      const videoTasks = (vidData.videos || []).map((v: any) => ({ ...v, type: "video" }));
+      return [...imageTasks, ...videoTasks].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
-      return all;
     },
     { refreshInterval: 5000 },
   );
 
-  const tasks = tasksData || [];
-  const isActive = pathname === "/tasks";
+  const dismiss = useCallback((id: string) => {
+    setDismissed((prev) => {
+      const next = new Set(prev).add(id);
+      saveDismissed(next);
+      return next;
+    });
+  }, []);
+
+  const clearCompleted = useCallback(() => {
+    const finishedIds = (tasksData || []).filter((t: any) => t.status === "completed" || t.status === "failed").map((t: any) => t.id as string);
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      finishedIds.forEach((id: string) => next.add(id));
+      saveDismissed(next);
+      return next;
+    });
+  }, [tasksData]);
+
+  const handleOpenGenerator = useCallback((task: any) => {
+    if (task.type === "image") {
+      sessionStorage.setItem("img-gen-init", JSON.stringify({ prompt: task.prompt, style: task.style, aspectRatio: task.aspectRatio, referenceImages: task.referenceImages || [] }));
+      router.push("/image-generator");
+    } else if (task.type === "video") {
+      sessionStorage.setItem("vid-gen-init", JSON.stringify({ prompt: task.prompt, resolution: task.resolution, aspectRatio: task.aspectRatio, duration: task.duration, referenceImages: task.referenceImages || [], referenceVideos: task.referenceVideos || [], referenceAudios: task.referenceAudios || [] }));
+      router.push("/video-generator");
+    }
+    setOpen(false);
+  }, [router]);
+
+  const allTasks = (tasksData || []) as any[];
+  const visibleTasks = allTasks.filter((t: any) => !dismissed.has(t.id));
+  const hasCompleted = visibleTasks.some((t: any) => t.status === "completed" || t.status === "failed");
+  const isActivePath = pathname === "/tasks";
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
         className={`relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-          isActive || open
-            ? "text-amber-400 bg-white/5"
-            : "text-muted-foreground hover:text-foreground"
+          isActivePath || open ? "text-amber-400 bg-white/5" : "text-muted-foreground hover:text-foreground"
         }`}
       >
         <ListTodo className="h-4 w-4" />
@@ -96,6 +212,16 @@ function TasksDropdown({
       </button>
 
       <AnimatePresence>
+        {selectedTask && (
+          <TaskDetailModal
+            task={selectedTask}
+            onClose={() => setSelectedTask(null)}
+            onOpenGenerator={handleOpenGenerator}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {open && (
           <motion.div
             initial={{ opacity: 0, y: 6, scale: 0.96 }}
@@ -105,73 +231,69 @@ function TasksDropdown({
             className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-border/60 bg-card/95 backdrop-blur-xl shadow-2xl overflow-hidden z-50 flex flex-col"
           >
             <div className="flex items-center justify-between px-4 py-2 text-[10px] font-bold text-muted-foreground tracking-wider border-b border-border/40">
-              <span>COMPLETED</span>
-              <button className="text-muted-foreground hover:text-foreground transition-colors">
-                × Clear completed
-              </button>
+              <span>RECENT TASKS</span>
+              {hasCompleted && (
+                <button onClick={clearCompleted} className="text-muted-foreground hover:text-red-400 transition-colors">
+                  × Clear completed
+                </button>
+              )}
             </div>
 
             <div className="max-h-[300px] overflow-y-auto p-2 space-y-1">
               {isLoading ? (
-                <div className="py-4 flex justify-center">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : tasks.length === 0 ? (
-                <div className="py-4 text-center text-xs text-muted-foreground">
-                  No tasks found.
-                </div>
+                <div className="py-4 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+              ) : visibleTasks.length === 0 ? (
+                <div className="py-4 text-center text-xs text-muted-foreground">No tasks found.</div>
               ) : (
-                tasks.map((task: any) => (
-                  <div
-                    key={task.id}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 group relative"
-                  >
-                    <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0 relative">
-                      {task.imageUrl || task.startFrameUrl || task.videoUrl ? (
-                        <Image
-                          src={
-                            task.imageUrl || task.startFrameUrl || task.videoUrl
-                          }
-                          alt="thumbnail"
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-white/5">
-                          {task.type === "video" ? (
-                            <Film className="h-4 w-4 text-purple-400/50" />
-                          ) : (
-                            <ImageIcon className="h-4 w-4 text-lime-400/50" />
-                          )}
-                        </div>
-                      )}
-                      {task.status === "processing" && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
-                        </div>
+                visibleTasks.map((task: any) => {
+                  const isTaskActive = task.status === "processing" || task.status === "pending";
+                  const thumbnailSrc = task.type === "image" ? task.imageUrl : (task.startFrameUrl || null);
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 group relative cursor-pointer"
+                      onClick={() => setSelectedTask(task)}
+                    >
+                      <div className="w-10 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0 relative">
+                        {task.type === "video" && task.videoUrl && task.status === "completed" ? (
+                          <video src={task.videoUrl} muted loop className="w-full h-full object-cover" />
+                        ) : thumbnailSrc ? (
+                          <Image src={thumbnailSrc} alt="thumbnail" fill className="object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-white/5">
+                            {task.type === "video" ? <Film className="h-4 w-4 text-purple-400/50" /> : <ImageIcon className="h-4 w-4 text-lime-400/50" />}
+                          </div>
+                        )}
+                        {isTaskActive && (
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                          </div>
+                        )}
+                        {task.status === "completed" && task.type === "video" && !isTaskActive && (
+                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Play className="h-4 w-4 text-white" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">
+                          {task.type === "video" ? "Video" : "Image"}
+                          {isTaskActive && <span className="ml-1 text-amber-400">(Processing)</span>}
+                          {task.status === "failed" && <span className="ml-1 text-red-400">(Failed)</span>}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground truncate">{task.prompt || "No prompt"}</p>
+                      </div>
+                      {!isTaskActive && (
+                        <button
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-muted-foreground transition-all flex-shrink-0"
+                          onClick={(e) => { e.stopPropagation(); dismiss(task.id); }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">
-                        {task.type === "video" ? "Video" : "Image"}
-                        {task.status === "processing" && (
-                          <span className="ml-1 text-amber-400">
-                            (Processing)
-                          </span>
-                        )}
-                        {task.status === "failed" && (
-                          <span className="ml-1 text-red-400">(Failed)</span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground truncate">
-                        Seedance 2.0 — ArtCraft
-                      </p>
-                    </div>
-                    <button className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-muted-foreground transition-all">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -181,7 +303,7 @@ function TasksDropdown({
                 onClick={() => setOpen(false)}
                 className="block w-full py-2 text-center text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
               >
-                Show all
+                Show all tasks
               </Link>
             </div>
           </motion.div>
@@ -344,26 +466,55 @@ export function SiteHeader() {
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeTaskCount, setActiveTaskCount] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+
+  const startPolling = useCallback(() => {
+    if (intervalRef.current) return;
+    intervalRef.current = setInterval(async () => {
+      try {
+        const res = await fetch("/api/tasks/active-count");
+        const data = await res.json();
+        const count = data.activeCount ?? 0;
+        setActiveTaskCount(count);
+        if (count === 0 && intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      } catch {}
+    }, 10000);
+  }, []);
 
   useEffect(() => {
     if (status !== "authenticated") return;
 
-    const fetchActiveCount = async () => {
-      try {
-        const res = await fetch("/api/tasks/active-count");
-        const data = await res.json();
-        if (data.activeCount !== undefined) {
-          setActiveTaskCount(data.activeCount);
-        }
-      } catch (err) {
-        // Silent fail for polling
-      }
-    };
+    // Initial fetch
+    fetch("/api/tasks/active-count")
+      .then((r) => r.json())
+      .then((data) => {
+        const count = data.activeCount ?? 0;
+        setActiveTaskCount(count);
+        if (count > 0) startPolling();
+      })
+      .catch(() => {});
 
-    fetchActiveCount();
-    const interval = setInterval(fetchActiveCount, 10000);
-    return () => clearInterval(interval);
-  }, [status]);
+    // Listen for task-started events from this tab
+    const handleTaskStarted = () => { setActiveTaskCount((c) => Math.max(c, 1)); startPolling(); };
+    window.addEventListener("task-started", handleTaskStarted);
+
+    // BroadcastChannel for cross-tab sync
+    try {
+      const bc = new BroadcastChannel("task_channel");
+      channelRef.current = bc;
+      bc.onmessage = (e) => { if (e.data === "task-started") handleTaskStarted(); };
+    } catch {}
+
+    return () => {
+      window.removeEventListener("task-started", handleTaskStarted);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      channelRef.current?.close();
+    };
+  }, [status, startPolling]);
 
   // Don't show header on login/signup pages
   if (pathname === "/login" || pathname === "/signup") return null;
