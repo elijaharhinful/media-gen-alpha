@@ -119,7 +119,7 @@ export default function VideoGeneratorPage() {
   const [inputMode, setInputMode] = useState<InputMode>("keyframe");
   const [resolution, setResolution] = useState("720p");
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [duration, setDuration] = useState(3);
+  const [duration, setDuration] = useState(4);
 
   const [startFrame, setStartFrame] = useState<FrameImage | null>(null);
   const [endFrame, setEndFrame] = useState<FrameImage | null>(null);
@@ -148,13 +148,13 @@ export default function VideoGeneratorPage() {
         if (parsed.resolution) setResolution(parsed.resolution);
         if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio);
         
-        let dur = 3;
+        let dur = 4;
         if (typeof parsed.duration === 'string') {
-          dur = parseInt(parsed.duration.replace('s', ''), 10) || 3;
+          dur = parseInt(parsed.duration.replace('s', ''), 10) || 4;
         } else if (typeof parsed.duration === 'number') {
           dur = parsed.duration;
         }
-        setDuration(dur);
+        setDuration(Math.max(dur, 4));
 
         const hasRefs = (parsed.referenceImages?.length > 0) || (parsed.referenceVideos?.length > 0) || (parsed.referenceAudios?.length > 0);
         if (hasRefs) {
@@ -365,10 +365,15 @@ export default function VideoGeneratorPage() {
       }
       setResult(data);
       mutateHistory();
-      if (data.status === "completed") toast.success("Video generated!");
-      else if (data.status === "processing")
+      if (data.status === "completed") {
+        toast.success("Video generated!");
+      } else if (data.status === "failed") {
+        toast.error(data.errorMessage || data.message || "Video generation request failed.");
+      } else if (data.status === "processing") {
         toast.info("Video generation is in progress. You can monitor it in the Tasks menu.");
-      else toast.info(data.message || "Request saved");
+      } else {
+        toast.info(data.message || "Request saved");
+      }
     } catch {
       toast.error("Something went wrong");
     } finally {

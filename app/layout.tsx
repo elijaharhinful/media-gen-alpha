@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import NextTopLoader from "nextjs-toploader";
 import { SiteHeader } from "@/components/site-header";
 import { Providers } from "@/components/providers";
 
@@ -62,6 +63,17 @@ export default function RootLayout({
           }}
         />
         <Providers>
+          <NextTopLoader
+            color="#22d3ee"
+            initialPosition={0.08}
+            crawlSpeed={200}
+            height={3}
+            crawl={true}
+            showSpinner={false}
+            easing="ease"
+            speed={200}
+            shadow="0 0 10px #22d3ee, 0 0 5px #22d3ee"
+          />
           <SiteHeader />
           <main className="min-h-screen">{children}</main>
         </Providers>

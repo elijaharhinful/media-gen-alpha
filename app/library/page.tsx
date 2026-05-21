@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   BookImage,
   ImageIcon,
@@ -60,6 +61,28 @@ type MediaItem = ImageItem | VideoItem;
 type MediaType = "all" | "images" | "videos";
 type SortOrder = "newest" | "oldest";
 type StatusFilter = "all" | "completed" | "processing" | "failed" | "pending";
+
+const downloadMedia = async (url: string, filename: string) => {
+  const toastId = toast.loading("Preparing download...");
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to fetch file content");
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+    toast.success("Downloaded successfully!", { id: toastId });
+  } catch (err) {
+    console.error("Direct download failed, opening in new tab", err);
+    toast.error("Download failed. Opening in new tab.", { id: toastId });
+    window.open(url, "_blank");
+  }
+};
 
 // ─── Status Badge ───────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -166,13 +189,12 @@ function ImageLightbox({
               </span>
             )}
             {item.imageUrl && (
-              <a
-                href={item.imageUrl}
-                download
+              <button
+                onClick={() => downloadMedia(item.imageUrl!, `image-${item.id}.png`)}
                 className="flex items-center gap-1.5 text-xs text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors"
               >
                 <Download className="h-3.5 w-3.5" /> Download
-              </a>
+              </button>
             )}
             <button
               onClick={() => onOpenGenerator(item)}
@@ -274,13 +296,12 @@ function VideoModal({
               </span>
             )}
             {item.videoUrl && (
-              <a
-                href={item.videoUrl}
-                download
+              <button
+                onClick={() => downloadMedia(item.videoUrl!, `video-${item.id}.mp4`)}
                 className="flex items-center gap-1.5 text-xs text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors"
               >
                 <Download className="h-3.5 w-3.5" /> Download
-              </a>
+              </button>
             )}
             <button
               onClick={() => onOpenGenerator(item)}
@@ -352,15 +373,16 @@ function ImageCard({
         </div>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
           {item.imageUrl && (
-            <a
-              href={item.imageUrl}
-              download
-              onClick={(e) => e.stopPropagation()}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadMedia(item.imageUrl!, `image-${item.id}.png`);
+              }}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground"
               title="Download Image"
             >
               <Download className="h-4 w-4" />
-            </a>
+            </button>
           )}
           <button
             onClick={(e) => {
@@ -414,15 +436,16 @@ function ImageCard({
             <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>
           {item.imageUrl && (
-            <a
-              href={item.imageUrl}
-              download
-              onClick={(e) => e.stopPropagation()}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadMedia(item.imageUrl!, `image-${item.id}.png`);
+              }}
               className="p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
               title="Download Image"
             >
               <Download className="h-3.5 w-3.5" />
-            </a>
+            </button>
           )}
         </div>
         {/* Expand icon */}
@@ -518,15 +541,16 @@ function VideoCard({
         </div>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
           {item.videoUrl && (
-            <a
-              href={item.videoUrl}
-              download
-              onClick={(e) => e.stopPropagation()}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadMedia(item.videoUrl!, `video-${item.id}.mp4`);
+              }}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground"
               title="Download Video"
             >
               <Download className="h-4 w-4" />
-            </a>
+            </button>
           )}
           <button
             onClick={(e) => {
@@ -577,15 +601,16 @@ function VideoCard({
             <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>
           {item.videoUrl && (
-            <a
-              href={item.videoUrl}
-              download
-              onClick={(e) => e.stopPropagation()}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadMedia(item.videoUrl!, `video-${item.id}.mp4`);
+              }}
               className="p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
               title="Download Video"
             >
               <Download className="h-3.5 w-3.5" />
-            </a>
+            </button>
           )}
         </div>
         {item.status === "processing" && (
