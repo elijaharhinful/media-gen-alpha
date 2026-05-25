@@ -15,6 +15,7 @@ interface Student {
   email: string;
   name: string | null;
   creditLimit: number | null;
+  limitExempt: boolean;
   isBlocked: boolean;
   createdAt: string;
   creditsUsed: number;
@@ -140,6 +141,20 @@ export default function AdminPage() {
       fetchData();
     } catch {
       toast.error('Failed to update');
+    }
+  };
+
+  const toggleExempt = async (id: string, currentExempt: boolean) => {
+    try {
+      await fetch('/api/admin/students', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, limitExempt: !currentExempt }),
+      });
+      toast.success(currentExempt ? 'Exemption revoked' : 'Student is now exempt from limits');
+      fetchData();
+    } catch {
+      toast.error('Failed to update exemption');
     }
   };
 
@@ -410,6 +425,7 @@ export default function AdminPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">
                             {s.name || s.email}
+                            {s.limitExempt && <span className="ml-2 rounded bg-lime-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-lime-400">Exempt</span>}
                             {s.isBlocked && <span className="ml-2 text-xs text-red-400">[Blocked]</span>}
                           </p>
                           <p className="text-xs text-muted-foreground">{s.email}</p>
@@ -447,7 +463,18 @@ export default function AdminPage() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-1">
+                         <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => toggleExempt(s.id, s.limitExempt)}
+                            className={`p-2 rounded-lg transition-colors ${
+                              s.limitExempt
+                                ? 'text-lime-400 hover:bg-lime-400/10'
+                                : 'text-muted-foreground hover:bg-muted/10'
+                            }`}
+                            title={s.limitExempt ? 'Revoke Exemption' : 'Exempt from Limits'}
+                          >
+                            <Shield className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => toggleBlock(s.id, s.isBlocked)}
                             className={`p-2 rounded-lg transition-colors ${

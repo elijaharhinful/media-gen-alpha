@@ -19,6 +19,7 @@ async function _GET() {
       email: true,
       name: true,
       creditLimit: true,
+      limitExempt: true,
       isBlocked: true,
       createdAt: true,
     },
@@ -54,7 +55,7 @@ async function _POST(request: NextRequest) {
   if (error) return error;
 
   const body = await request.json();
-  const { email, password, name, creditLimit } = body ?? {};
+  const { email, password, name, creditLimit, limitExempt } = body ?? {};
 
   if (!email || !password) {
     return NextResponse.json(
@@ -80,12 +81,14 @@ async function _POST(request: NextRequest) {
       name: name || email.split("@")[0],
       role: "STUDENT",
       creditLimit: creditLimit !== undefined ? creditLimit : null,
+      limitExempt: limitExempt === true,
     },
     select: {
       id: true,
       email: true,
       name: true,
       creditLimit: true,
+      limitExempt: true,
       isBlocked: true,
       createdAt: true,
     },
@@ -100,7 +103,7 @@ async function _PATCH(request: NextRequest) {
   if (error) return error;
 
   const body = await request.json();
-  const { id, creditLimit, isBlocked, name } = body ?? {};
+  const { id, creditLimit, isBlocked, name, limitExempt } = body ?? {};
 
   if (!id) {
     return NextResponse.json(
@@ -113,6 +116,7 @@ async function _PATCH(request: NextRequest) {
   if (creditLimit !== undefined) updateData.creditLimit = creditLimit;
   if (isBlocked !== undefined) updateData.isBlocked = isBlocked;
   if (name !== undefined) updateData.name = name;
+  if (limitExempt !== undefined) updateData.limitExempt = limitExempt;
 
   const student = await prisma.user.update({
     where: { id },
@@ -122,6 +126,7 @@ async function _PATCH(request: NextRequest) {
       email: true,
       name: true,
       creditLimit: true,
+      limitExempt: true,
       isBlocked: true,
     },
   });

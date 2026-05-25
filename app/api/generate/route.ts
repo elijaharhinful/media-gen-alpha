@@ -18,10 +18,12 @@ async function _POST(request: NextRequest) {
       );
     }
 
-    // Check credits
+    // Check credits with safe precheck cost
+    const preCheckCost = parseInt(process.env.FALLBACK_COST_MULTIPLIER || "1", 10);
     const creditCheck = await canUserUseTool(
       session.user.id,
       "PROMPT_MULTIPLIER",
+      { customCost: preCheckCost }
     );
     if (!creditCheck.allowed) {
       return new Response(
@@ -115,6 +117,7 @@ async function _POST(request: NextRequest) {
       async start(controller) {
         let buffer = "";
         let partialRead = "";
+        let capturedCost = 0;
 
         try {
           while (true) {
@@ -174,6 +177,12 @@ async function _POST(request: NextRequest) {
                         userId: session.user.id,
                       },
                     });
+                    
+                    const markup = parseFloat(process.env.PLATFORM_MARKUP_MULTIPLIER || "2.0");
+                    const dynamicCost = capturedCost > 0
+                      ? Math.max(1, Math.ceil(capturedCost * 100 * markup))
+                      : preCheckCost;
+
                     await recordCreditUsage(
                       session.user.id,
                       "PROMPT_MULTIPLIER",
@@ -181,6 +190,7 @@ async function _POST(request: NextRequest) {
                         promptId: saved.id,
                         input: sceneDescription.substring(0, 100),
                       },
+                      dynamicCost
                     );
                   } catch (dbErr: any) {
                     console.error("DB save error:", dbErr);
@@ -197,6 +207,11 @@ async function _POST(request: NextRequest) {
 
                 try {
                   const parsed = JSON.parse(data);
+                  const cost = parsed?.usage?.cost;
+                  if (typeof cost === 'number' && cost > 0) {
+                    capturedCost = cost;
+                  }
+                  
                   const content = parsed?.choices?.[0]?.delta?.content ?? "";
                   buffer += content;
 
@@ -237,10 +252,21 @@ async function _POST(request: NextRequest) {
                   userId: session.user.id,
                 },
               });
-              await recordCreditUsage(session.user.id, "PROMPT_MULTIPLIER", {
-                promptId: saved.id,
-                input: sceneDescription.substring(0, 100),
-              });
+              
+              const markup = parseFloat(process.env.PLATFORM_MARKUP_MULTIPLIER || "2.0");
+              const dynamicCost = capturedCost > 0
+                ? Math.max(1, Math.ceil(capturedCost * 100 * markup))
+                : preCheckCost;
+
+              await recordCreditUsage(
+                session.user.id,
+                "PROMPT_MULTIPLIER",
+                {
+                  promptId: saved.id,
+                  input: sceneDescription.substring(0, 100),
+                },
+                dynamicCost
+              );
             } catch (dbErr: any) {
               console.error("DB save error:", dbErr);
             }

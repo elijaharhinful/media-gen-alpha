@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordCreditUsage } from "@/lib/credits";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { createS3Client, getBucketConfig } from "@/lib/aws-config";
 import { getFileUrl } from "@/lib/s3";
@@ -95,6 +96,15 @@ export const POST = withRequestLog(
         where: { id: record.id },
         data: { status: "failed", errorMessage: extractedError },
       });
+
+      // Killsafe: Fully refund the reserved pre-check holding cost
+      const preCheckCost = parseInt(process.env.FALLBACK_COST_VIDEO || "5", 10);
+      await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
+        videoId: record.id,
+        prompt: record.prompt.substring(0, 100),
+        status: "failed_refund"
+      }, -preCheckCost);
+
       return NextResponse.json({ id: record.id, status: "failed", errorMessage: extractedError });
     }
 
@@ -145,6 +155,26 @@ export const POST = withRequestLog(
         jobId: jobId,
       },
     });
+
+    // dynamic cost calculation and adjustment billing
+    const openRouterCost = data?.usage?.cost;
+    const preCheckCost = parseInt(process.env.FALLBACK_COST_VIDEO || "5", 10);
+    let finalCreditCost = preCheckCost;
+
+    if (typeof openRouterCost === 'number' && openRouterCost > 0) {
+      const markup = parseFloat(process.env.PLATFORM_MARKUP_MULTIPLIER || "2.0");
+      finalCreditCost = Math.max(1, Math.ceil(openRouterCost * 100 * markup));
+    }
+
+    const diff = finalCreditCost - preCheckCost;
+    if (diff !== 0) {
+      // If positive: deducts the difference. If negative: refunds the difference automatically!
+      await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
+        videoId: record.id,
+        prompt: record.prompt.substring(0, 100),
+        status: "completed_adjustment"
+      }, diff);
+    }
 
     revalidatePath("/video-generator");
     revalidatePath("/history");

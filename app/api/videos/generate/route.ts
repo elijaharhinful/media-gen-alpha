@@ -44,9 +44,11 @@ async function _POST(request: NextRequest) {
       );
     }
 
+    const preCheckCost = parseInt(process.env.FALLBACK_COST_VIDEO || "5", 10);
     const creditCheck = await canUserUseTool(
       session.user.id,
       "VIDEO_GENERATOR",
+      { customCost: preCheckCost }
     );
     if (!creditCheck.allowed) {
       return NextResponse.json({ error: creditCheck.reason }, { status: 403 });
@@ -180,10 +182,7 @@ async function _POST(request: NextRequest) {
           where: { id: record.id },
           data: { status: "failed", errorMessage: extractedErrorMessage },
         });
-        await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
-          videoId: record.id,
-          prompt: prompt.substring(0, 100),
-        });
+        // No credits deducted since job failed to submit upstream
         return NextResponse.json({
           id: record.id,
           status: "failed",
@@ -205,7 +204,7 @@ async function _POST(request: NextRequest) {
         await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
           videoId: record.id,
           prompt: prompt.substring(0, 100),
-        });
+        }, preCheckCost);
         
         return NextResponse.json({
           id: record.id,
@@ -234,10 +233,7 @@ async function _POST(request: NextRequest) {
         where: { id: record.id },
         data: { status: "failed", errorMessage: errMessage },
       });
-      await recordCreditUsage(session.user.id, "VIDEO_GENERATOR", {
-        videoId: record.id,
-        prompt: prompt.substring(0, 100),
-      });
+      // No credits deducted since generation failed before starting
       return NextResponse.json({
         id: record.id,
         status: "failed",

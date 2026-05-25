@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette, Upload, X, ArrowRight } from 'lucide-react';
+import { ImageIcon, Sparkles, Download, Loader2, Clock, Ratio, Palette, Upload, X, ArrowRight, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -46,6 +46,7 @@ interface GeneratedImageResult {
   prompt: string;
   style?: string;
   aspectRatio?: string;
+  status?: string;
 }
 
 interface RefImage {
@@ -63,6 +64,7 @@ export default function ImageGeneratorPage() {
   const [style, setStyle] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [refImages, setRefImages] = useState<RefImage[]>([]);
+  const [model, setModel] = useState<'model1' | 'model2'>('model1');
   const [draggedImgIdx, setDraggedImgIdx] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -82,6 +84,7 @@ export default function ImageGeneratorPage() {
         if (parsed.prompt) setPrompt(parsed.prompt);
         if (parsed.style) setStyle(parsed.style);
         if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio);
+        if (parsed.model) setModel(parsed.model);
         
         if (parsed.referenceImages && parsed.referenceImages.length > 0) {
           const loadRefs = async () => {
@@ -123,6 +126,41 @@ export default function ImageGeneratorPage() {
   );
   
   const history: GeneratedImageResult[] = historyData?.images || [];
+
+  // Poll for active image generation result
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (result?.id && result?.status === 'processing') {
+      intervalId = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/images/${result.id}/sync`, {
+            method: 'POST',
+          });
+          if (!res.ok) return;
+
+          const data = await res.json();
+          if (data.status === 'completed' || data.status === 'failed') {
+            setResult((prev: any) => ({ ...prev, ...data }));
+            mutateHistory();
+            clearInterval(intervalId);
+
+            if (data.status === 'completed') {
+              toast.success('Image generation complete!');
+            } else if (data.status === 'failed') {
+              toast.error('Image generation failed.');
+            }
+          }
+        } catch (error) {
+          console.error('Polling sync error:', error);
+        }
+      }, 4000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [result?.id, result?.status, mutateHistory]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -224,6 +262,7 @@ export default function ImageGeneratorPage() {
           style,
           aspectRatio,
           referenceImages: refPaths,
+          model,
         }),
       });
 
@@ -231,16 +270,16 @@ export default function ImageGeneratorPage() {
 
       if (!res.ok) {
         toast.error(data.error || 'Generation failed');
-        setLoading(false);
         return;
       }
 
-      if (data.imageUrl) {
-        setResult(data);
-        mutateHistory();
+      setResult(data);
+      mutateHistory();
+
+      if (data.status === 'processing') {
+        toast.info('Image generation in progress. You can monitor it in the Tasks menu.');
+      } else if (data.imageUrl) {
         toast.success('Image generated!');
-      } else {
-        toast.error('No image was returned');
       }
     } catch {
       toast.error('Something went wrong');
@@ -334,6 +373,47 @@ export default function ImageGeneratorPage() {
                   </div>
                 </div>
 
+                {/* Model Selection Switcher */}
+                <div className="mt-4">
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
+                    <Sparkles className="h-3.5 w-3.5" /> Image Model
+                  </label>
+                  <div className="relative flex rounded-xl border border-border bg-background p-1 w-full">
+                    <button
+                      type="button"
+                      onClick={() => setModel('model1')}
+                      className={`relative flex-1 flex flex-col items-center justify-center py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200 z-10 ${
+                        model === 'model1' ? 'text-lime-400' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {model === 'model1' && (
+                        <motion.div
+                          layoutId="activeModelIndicator"
+                          className="absolute inset-0 rounded-lg bg-lime-400/10 border border-lime-400/20 shadow-[0_0_12px_rgba(163,230,53,0.15)] z-[-1]"
+                          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        />
+                      )}
+                      <span>Model 1</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModel('model2')}
+                      className={`relative flex-1 flex flex-col items-center justify-center py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200 z-10 ${
+                        model === 'model2' ? 'text-lime-400' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {model === 'model2' && (
+                        <motion.div
+                          layoutId="activeModelIndicator"
+                          className="absolute inset-0 rounded-lg bg-lime-400/10 border border-lime-400/20 shadow-[0_0_12px_rgba(163,230,53,0.15)] z-[-1]"
+                          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        />
+                      )}
+                      <span>Model 2</span>
+                    </button>
+                  </div>
+                </div>
+ 
                 <div className="grid grid-cols-2 gap-4 mt-4">
                   <div>
                     <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
@@ -403,7 +483,7 @@ export default function ImageGeneratorPage() {
             <div className="space-y-4">
               <div className="rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-6 min-h-[300px] flex items-center justify-center">
                 <AnimatePresence mode="wait">
-                  {loading ? (
+                  {loading || result?.status === 'processing' ? (
                     <motion.div
                       key="loading"
                       initial={{ opacity: 0 }}
@@ -414,7 +494,17 @@ export default function ImageGeneratorPage() {
                       <Loader2 className="h-10 w-10 text-lime-400 animate-spin mx-auto mb-3" />
                       <p className="text-sm text-muted-foreground">Creating your image...</p>
                     </motion.div>
-                  ) : result?.imageUrl && !imgError ? (
+                  ) : result?.status === 'failed' ? (
+                    <motion.div
+                      key="failed"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-center"
+                    >
+                      <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-3" style={{ color: '#F87171' }} />
+                      <p className="text-sm text-muted-foreground">Image generation failed.</p>
+                    </motion.div>
+                  ) : result?.imageUrl && result?.status === 'completed' && !imgError ? (
                     <motion.div
                       key="result"
                       initial={{ opacity: 0, scale: 0.95 }}

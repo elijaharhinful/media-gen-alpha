@@ -23,6 +23,7 @@ model User {
     password       String
     role           UserRole @default(STUDENT)
     creditLimit    Int?     // null = unlimited; percentage of pool (e.g., 30 = 30%)
+    limitExempt    Boolean  @default(false) // Admin Killsafe Override
     isBlocked      Boolean  @default(false)
     createdAt      DateTime @default(now())
     updatedAt      DateTime @updatedAt
@@ -85,6 +86,7 @@ model GeneratedImage {
     referenceImages String[] @default([]) // cloud storage paths
     style     String?
     aspectRatio String? // e.g., "1:1", "16:9", "9:16"
+    model     String?  // e.g., "model1", "model2"
     status    String   @default("pending") // pending, completed, failed
     userId    String?
     createdAt DateTime @default(now())
