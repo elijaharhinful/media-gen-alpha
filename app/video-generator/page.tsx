@@ -269,6 +269,34 @@ export default function VideoGeneratorPage() {
     setRefAudios(newRefs);
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+
+    if (files.length === 0) return;
+
+    const newImages = files.map(file => ({
+      id: crypto.randomUUID(),
+      file,
+      name: file.name || 'Pasted Image',
+      preview: URL.createObjectURL(file),
+    }));
+
+    handleImagesChange([...refImages, ...newImages]);
+    
+    if (inputMode !== "reference") {
+      setInputMode("reference");
+    }
+  };
+
   // Poll for active video generation result
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -457,6 +485,7 @@ export default function VideoGeneratorPage() {
                   <MentionTextarea
                     value={prompt}
                     onChange={setPrompt}
+                    onPaste={handlePaste}
                     placeholder="Describe the video you want to generate... Use @ to tag references and characters!"
                     mentionOptions={mentionOptions}
                   />

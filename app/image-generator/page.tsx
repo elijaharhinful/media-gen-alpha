@@ -177,6 +177,34 @@ export default function ImageGeneratorPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+
+    if (files.length === 0) return;
+
+    if (refImages.length + files.length > 10) {
+      toast.error('Maximum 10 reference images allowed');
+      return;
+    }
+
+    const newImages = files.map(file => ({
+      id: crypto.randomUUID(),
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    
+    setRefImages(prev => [...prev, ...newImages]);
+  };
+
   const handleDragStart = (e: React.DragEvent, idx: number) => {
     setDraggedImgIdx(idx);
     e.dataTransfer.effectAllowed = 'move';
@@ -324,6 +352,7 @@ export default function ImageGeneratorPage() {
                 <textarea
                   value={prompt}
                   onChange={e => setPrompt(e.target.value)}
+                  onPaste={handlePaste}
                   placeholder="Describe the image you want to create..."
                   className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm min-h-[120px] resize-y focus:outline-none focus:ring-2 focus:ring-lime-400/50"
                   maxLength={2000}

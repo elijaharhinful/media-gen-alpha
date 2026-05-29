@@ -19,6 +19,7 @@ interface MentionTextareaProps {
   maxLength?: number;
   className?: string;
   mentionOptions?: MentionOption[];
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
 }
 
 export function MentionTextarea({
@@ -28,6 +29,7 @@ export function MentionTextarea({
   maxLength,
   className = "",
   mentionOptions = [],
+  onPaste,
 }: MentionTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -191,6 +193,7 @@ export function MentionTextarea({
         onScroll={syncScroll}
         onClick={updateMentions}
         onKeyUp={updateMentions}
+        onPaste={onPaste}
         placeholder={placeholder}
         maxLength={maxLength}
         className={`${sharedStyle} relative z-10 resize-y focus:outline-none bg-transparent w-full min-h-[110px]`}
